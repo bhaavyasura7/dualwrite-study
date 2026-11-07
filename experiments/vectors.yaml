@@ -1,0 +1,674 @@
+# =============================================================================
+# Test catalogue — Fault-Injection Study of Database–Kafka Consistency Patterns
+# File: experiments/vectors.yaml   ·   Spec version 1.1   ·   November 2026
+# =============================================================================
+#
+# SCHEMA
+# ------
+# id            Unique vector ID (matches the paper and SPEC.md).
+# group         control | A..I | perf
+# priority      must | should | optional
+# mode          control  – no fault or graceful fault; `assert` is enforced
+#               targeted – fault triggered at an exact code point (crash/stall)
+#               random   – fault injected at a random time within `at_s`
+#               sweep    – no fault; a parameter is varied (performance/tuning)
+#               unit     – not run by the runner (e.g. go test)
+#               alias    – no own cycles; points at the vectors that cover it
+# patterns      List of P1..P5. Every pattern is a separate cell.
+# repeats       Repetitions per cell (default from `defaults`).
+# topology      Overrides: relays, brokers, replication (async|sync),
+#               consumers (list of strategies run in parallel, each its own
+#               consumer group and own tables), consumers_per_group.
+# env           Fixed environment overrides for this vector.
+# sweep         Cartesian product; each combination is a cell.
+#               Plain keys      -> environment variables
+#               topology.<k>    -> topology field
+#               load.<k>        -> load field
+#               faults[i].<k>   -> field of the i-th fault (dotted into params)
+# cells         Explicit list of override maps (used instead of `sweep` when a
+#               cartesian product makes no sense).
+# crash         Targeted crash point: {component, point, after_n, instance}.
+#               Sets CRASH_AT / CRASH_AFTER_N on that component (all replicas
+#               unless `instance` is given). Component dies via SIGKILL.
+# stall         Targeted stall point: {component, point, ms, after_n, instance}.
+#               The goroutine at that line sleeps `ms`, then continues
+#               (deterministic stand-in for a GC pause; see SPEC 7.2).
+# faults        Ordered list of faults. Each:
+#                 type        see FAULT TYPES below
+#                 target      see TARGETS below
+#                 at_s        [lo, hi] seconds after warm-up ends; uniform.
+#                             [x, x] = fixed time.
+#                 on_log      inject when this log marker appears on target's
+#                             component (alternative to at_s)
+#                 duration_s  number or [lo, hi] (uniform). Omitted for
+#                             one-shot faults (crash, kill_leader, failover).
+#                 params      type-specific parameters
+# by_pattern    Per-pattern override of any field above (crash/stall/faults/env).
+# assert        Enforced only in control vectors (and A-1b, A-2, A-5).
+#               A violated assert marks the cycle CONTROL_FAIL and stops the run.
+# assert_scope  all (default) | hooked  – `hooked` applies the assert only to the
+#               event that hit the crash point, not to collateral damage.
+# requires_rebuild  true -> runner rebuilds Postgres primary + replica and
+#               repoints the pg proxies after every cycle (failover vectors).
+# expect        Hypothesis, recorded with the results. Never enforced.
+#
+# FAULT TYPES
+#   crash               SIGKILL the container
+#   graceful_stop       docker stop (SIGTERM + grace period), start after duration
+#   restart             docker restart (graceful)
+#   pause               docker pause, unpause after duration
+#   broker_stop         stop Kafka broker container(s), start after duration
+#   proxy_disable       disable a Toxiproxy proxy group (connection cut)
+#   latency             Toxiproxy latency toxic; params: latency_ms, jitter_ms
+#   withhold_downstream Toxiproxy `timeout` toxic (timeout=0) on the downstream
+#                       stream only: requests reach the server, responses never
+#                       return (= lost acknowledgements)
+#   reset_peer          Toxiproxy reset_peer toxic; params: toxicity (0..1)
+#                       (flaky connections; Toxiproxy cannot drop TCP packets)
+#   failover            kill primary, pg_promote() replica, repoint pg proxies
+#   kill_leader         SIGKILL the broker leading the given partition
+#
+# TARGETS
+#   orderservice, relay (all replicas), relay-1, relay-any (random replica),
+#   connect, kafka (all brokers), partition-0-leader, consumers (all strategy
+#   containers), consumers-member-1 (first member of every consumer group),
+#   kafka-app (Toxiproxy group: app -> every broker), kafka-connect,
+#   pg-app, pg-connect, postgres (primary)
+#
+# RECOVERY RULE
+#   A component killed by a crash point or `crash` fault is RECREATED (not
+#   restarted) with CRASH_AT/STALL_AT cleared, after the last fault in the
+#   cycle has ended (immediately if no other fault is active).
+#
+# TIMING
+#   Load runs: warm-up -> faults -> until last fault recovered + post_fault_s.
+#   Vectors without faults use load.duration_s instead.
+# =============================================================================
+
+defaults:
+  repeats: 30
+  load: { mode: constant, rate_per_s: 100, warmup_s: 10, post_fault_s: 20 }
+  drain: { quiet_s: 10, timeout_s: 120 }
+  topology:
+    relays: 1
+    brokers: 1
+    replication: async
+    consumers: []
+    consumers_per_group: 1
+  env:
+    KAFKA_ACKS: all
+    KAFKA_IDEMPOTENT: true
+    KAFKA_LINGER_MS: 5
+    KAFKA_SYNC_SEND: false
+    KAFKA_REQUEST_TIMEOUT_MS: 3000
+    KAFKA_DELIVERY_TIMEOUT_MS: 5000
+    TOPIC_PARTITIONS: 3
+    TOPIC_RF: 1
+    TOPIC_MIN_ISR: 1
+    RETRY_MAX: 5
+    RETRY_BASE_MS: 200
+    RELAY_BATCH_SIZE: 100
+    RELAY_POLL_INTERVAL_MS: 500
+    OFFSET_FLUSH_MS: 60000
+    CONNECT_EOS: off                      # off | on (see SPEC 9.2)
+    CDC_FAILOVER_RECOVERY: new_slot_no_snapshot
+    CONSUMER_COMMIT_ORDER: effect_first   # effect_first | offset_first
+    CONSUMER_SESSION_TIMEOUT_MS: 10000
+    CRASH_AFTER_N: 50
+    PG_IDLE_TX_TIMEOUT_S: 10
+
+vectors:
+
+  # ---------------------------------------------------------------------------
+  # CONTROLS — run first; any failure means the setup is wrong, not a finding
+  # ---------------------------------------------------------------------------
+  - id: C0-1
+    group: control
+    priority: must
+    mode: control
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 1
+    load: { duration_s: 3600 }
+    topology: { consumers: [naive, dedup, upsert] }
+    assert: { lost: 0, ghost: 0, duplicates: 0, out_of_order: 0, business_damage: 0 }
+    expect: Zero damage for every pattern and every consumer when nothing fails.
+
+  - id: C0-2
+    group: control
+    priority: must
+    mode: unit
+    command: go test ./internal/checker/... -run Golden
+    expect: Checker reports exactly the damage planted in the golden fixtures.
+
+  - id: C0-3
+    group: control
+    priority: must
+    mode: control
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 10
+    faults:
+      - { type: graceful_stop, target: orderservice, at_s: [10, 30], duration_s: 5 }
+    assert: { lost: 0, ghost: 0, duplicates: 0 }
+    expect: A graceful stop of the order service causes no damage (needs SIGTERM handling, SPEC 6.5).
+
+  - id: C0-3r
+    group: control
+    priority: must
+    mode: control
+    patterns: [P3]
+    repeats: 10
+    faults:
+      - { type: graceful_stop, target: relay, at_s: [10, 30], duration_s: 5 }
+    assert: { lost: 0, ghost: 0, duplicates: 0 }
+    expect: A graceful stop of the relay finishes its batch and causes no damage.
+
+  # ---------------------------------------------------------------------------
+  # A. APPLICATION CRASH
+  # ---------------------------------------------------------------------------
+  - id: A-1
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P1, P2]
+    crash: { component: orderservice, point: after_db_commit }
+    expect: Hooked event lost in every cycle; collateral losses from other in-flight requests.
+
+  - id: A-1b
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P3, P4, P5]
+    repeats: 10
+    crash: { component: orderservice, point: after_db_commit }
+    assert: { lost: 0, ghost: 0, duplicates: 0 }
+    expect: Same crash point, zero damage — publishing no longer depends on the service.
+
+  - id: A-2
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 10
+    crash: { component: orderservice, point: before_db_commit }
+    assert: { lost: 0, ghost: 0 }
+    assert_scope: hooked
+    expect: Hooked change rolls back. P1/P2 may still show collateral loss from other requests.
+
+  - id: A-3
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P2]
+    faults:
+      - { type: proxy_disable, target: kafka-app, at_s: [0, 0], duration_s: 30 }
+    crash: { component: orderservice, point: during_retry_backoff, after_n: 1 }
+    expect: Every event waiting in the in-memory retry queue is lost; retries do not fix dual write.
+
+  - id: A-4
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P3]
+    crash: { component: relay, point: after_publish_before_mark, after_n: 20 }
+    sweep: { RELAY_BATCH_SIZE: [1, 10, 100, 500] }
+    expect: Duplicates per crash approx. equal to the rows in the batch; no losses.
+
+  - id: A-5
+    group: A
+    priority: must
+    mode: targeted
+    patterns: [P3]
+    repeats: 10
+    crash: { component: relay, point: after_read_before_publish, after_n: 20 }
+    assert: { lost: 0, ghost: 0, duplicates: 0 }
+    expect: Rows stay unsent and are published once; pinpoints the duplicate window (contrast with A-4).
+
+  - id: A-6
+    group: A
+    priority: must
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    faults:
+      - { type: crash, target: orderservice, at_s: [5, 35] }
+    expect: P1/P2 lose events in most crashes; P3–P5 lose none.
+
+  - id: A-7
+    group: A
+    priority: must
+    mode: random
+    patterns: [P3]
+    faults:
+      - { type: crash, target: relay, at_s: [5, 35] }
+    sweep: { RELAY_BATCH_SIZE: [1, 10, 100, 500] }
+    expect: Duplicate probability and size grow with batch size.
+
+  - id: A-8
+    group: A
+    priority: should
+    mode: targeted
+    patterns: [P1]
+    crash: { component: orderservice, point: after_send_before_flush }
+    sweep: { KAFKA_SYNC_SEND: [false, true] }
+    expect: Async send loses events whose send() already returned (producer buffer); sync send does not.
+
+  # ---------------------------------------------------------------------------
+  # B. PROCESS PAUSE
+  # ---------------------------------------------------------------------------
+  - id: B-1
+    group: B
+    priority: must
+    mode: targeted
+    patterns: [P3]
+    topology: { relays: 2 }
+    stall: { component: relay, instance: relay-1, point: after_read_before_publish, ms: 5000, after_n: 20 }
+    expect: Out-of-order events for orders whose versions straddle the two relays' batches.
+
+  - id: B-2
+    group: B
+    priority: must
+    mode: targeted
+    patterns: [P3]
+    topology: { relays: 2 }
+    stall: { component: relay, instance: relay-1, point: after_read_before_publish, ms: 15000, after_n: 20 }
+    env: { PG_IDLE_TX_TIMEOUT_S: 10 }
+    expect: Postgres ends relay-1's idle transaction, relay-2 publishes the rows, relay-1 wakes and publishes them again (zombie duplicates).
+
+  - id: B-3
+    group: B
+    priority: should
+    mode: random
+    patterns: [P1, P2]
+    faults:
+      - { type: pause, target: orderservice, at_s: [5, 30], duration_s: [6, 10] }
+    expect: Records time out while paused although the broker stored them; P2's retries duplicate them.
+
+  - id: B-4
+    group: B
+    priority: should
+    mode: random
+    patterns: [P4, P5]
+    faults:
+      - { type: pause, target: connect, at_s: [5, 20] }
+    sweep: { "faults[0].duration_s": [5, 30, 60] }
+    expect: Inconsistency window grows with pause length; possible duplicates after resume.
+
+  - id: B-5
+    group: B
+    priority: should
+    mode: random
+    patterns: [P3]
+    faults:
+      - { type: pause, target: relay-any, at_s: [5, 15], duration_s: [1, 10] }
+      - { type: pause, target: relay-any, at_s: [15, 25], duration_s: [1, 10] }
+      - { type: pause, target: relay-any, at_s: [25, 35], duration_s: [1, 10] }
+    sweep: { topology.relays: [2, 4] }
+    expect: Out-of-order rate grows with the number of relays.
+
+  # ---------------------------------------------------------------------------
+  # C. BROKER OUTAGE
+  # ---------------------------------------------------------------------------
+  - id: C-1
+    group: C
+    priority: must
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 10
+    faults:
+      - { type: broker_stop, target: kafka, at_s: [5, 15] }
+    sweep: { "faults[0].duration_s": [10, 60, 300] }
+    expect: P1 loses events past the delivery timeout; P2 loses once retries run out; P3–P5 lose nothing but lag.
+
+  - id: C-2
+    group: C
+    priority: should
+    mode: random
+    patterns: [P1, P2, P3]
+    repeats: 20
+    faults:
+      - { type: proxy_disable, target: kafka-app, at_s: [5, 15] }
+    sweep: { "faults[0].duration_s": [10, 60] }
+    expect: Same as C-1 through the client timeout paths, with Kafka itself still running.
+
+  - id: C-3
+    group: C
+    priority: must
+    mode: random
+    patterns: [P2, P3]
+    faults:
+      - { type: proxy_disable, target: kafka-app, at_s: [5, 5], duration_s: 60 }
+    by_pattern:
+      P2: { faults: [ { type: proxy_disable, target: kafka-app, at_s: [5, 5], duration_s: 60 },
+                      { type: crash, target: orderservice, at_s: [15, 50] } ] }
+      P3: { faults: [ { type: proxy_disable, target: kafka-app, at_s: [5, 5], duration_s: 60 },
+                      { type: crash, target: relay, at_s: [15, 50] } ] }
+    expect: P2 loses its queued retries; the P3 outbox survives the publisher crash.
+
+  - id: C-4
+    group: C
+    priority: optional
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 20
+    topology: { brokers: 3 }
+    env: { TOPIC_RF: 3, TOPIC_MIN_ISR: 2 }
+    faults:
+      - { type: kill_leader, target: partition-0-leader, at_s: [10, 30] }
+    sweep: { KAFKA_ACKS: ["1", all] }
+    expect: acks=1 loses acknowledged events on leader failover; acks=all loses none. (P4/P5 via producer.override.acks.)
+
+  # ---------------------------------------------------------------------------
+  # D. DATABASE FAILOVER  (truth = the surviving, promoted database)
+  # ---------------------------------------------------------------------------
+  - id: D-1
+    group: D
+    priority: must
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 20
+    requires_rebuild: true
+    faults:
+      - { type: failover, target: postgres, at_s: [10, 30] }
+    expect: Ghost events for P1/P2, and for P3 when the relay published rows not yet replicated; P4/P5 behaviour depends on CDC recovery.
+
+  - id: D-2
+    group: D
+    priority: must
+    mode: targeted
+    patterns: [P4, P5]
+    repeats: 20
+    requires_rebuild: true
+    faults:
+      - { type: failover, target: postgres, at_s: [20, 20] }
+    sweep: { CDC_FAILOVER_RECOVERY: [new_slot_no_snapshot, new_slot_initial_snapshot] }
+    expect: No snapshot -> gap of lost events; initial snapshot -> mass duplicates. PG16 slots do not survive failover.
+
+  - id: D-3
+    group: D
+    priority: should
+    mode: targeted
+    patterns: [P3]
+    repeats: 20
+    requires_rebuild: true
+    stall: { component: relay, point: after_publish_before_mark, ms: 3000, after_n: 20 }
+    faults:
+      - { type: failover, target: postgres, on_log: STALL_POINT_HIT }
+    expect: Published batch never marked on the new primary -> duplicates; possible ghosts.
+
+  - id: D-4
+    group: D
+    priority: optional
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 20
+    requires_rebuild: true
+    topology: { replication: sync }
+    faults:
+      - { type: failover, target: postgres, at_s: [10, 30] }
+    expect: Synchronous replication removes ghost events at a measurable latency cost (compare with D-1).
+
+  # ---------------------------------------------------------------------------
+  # E. CONNECTOR RESTART
+  # ---------------------------------------------------------------------------
+  - id: E-1
+    group: E
+    priority: should
+    mode: random
+    patterns: [P4, P5]
+    repeats: 20
+    faults:
+      - { type: restart, target: connect, at_s: [10, 30] }
+    expect: Graceful restart flushes offsets; zero or few duplicates.
+
+  - id: E-2
+    group: E
+    priority: must
+    mode: random
+    patterns: [P4, P5]
+    faults:
+      - { type: crash, target: connect, at_s: [10, 35] }
+    sweep: { OFFSET_FLUSH_MS: [1000, 10000, 60000] }
+    expect: Mean duplicates per crash approx. rate x flush interval / 2.
+
+  - id: E-3
+    group: E
+    priority: must
+    mode: random
+    patterns: [P4, P5]
+    env: { OFFSET_FLUSH_MS: 60000 }
+    faults:
+      - { type: crash, target: connect, at_s: [10, 35] }
+    sweep: { CONNECT_EOS: [off, on] }
+    expect: Exactly-once source mode removes connector-restart duplicates, at a throughput cost.
+
+  - id: E-4
+    group: E
+    priority: should
+    mode: random
+    patterns: [P4, P5]
+    repeats: 5
+    faults:
+      - { type: graceful_stop, target: connect, at_s: [5, 5], duration_s: 300 }
+    expect: No loss; long catch-up window; WAL retained by the slot grows during the outage.
+
+  # ---------------------------------------------------------------------------
+  # F. NETWORK DEGRADATION
+  # ---------------------------------------------------------------------------
+  - id: F-1
+    group: F
+    priority: should
+    mode: random
+    patterns: [P1, P2, P3]
+    repeats: 20
+    faults:
+      - { type: latency, target: kafka-app, at_s: [5, 5], duration_s: 20, params: { latency_ms: 200 } }
+    sweep: { "faults[0].params.latency_ms": [200, 500, 1000] }
+    expect: Timeouts and retries; latency cost; duplicates only where idempotence does not cover the retry.
+
+  - id: F-2
+    group: F
+    priority: must
+    mode: random
+    patterns: [P1, P2, P3]
+    env: { KAFKA_IDEMPOTENT: false }
+    faults:
+      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 5 }
+    expect: Lost acknowledgements cause retries of stored records -> duplicates.
+
+  - id: F-3
+    group: F
+    priority: must
+    mode: random
+    patterns: [P1, P2, P3]
+    env: { KAFKA_IDEMPOTENT: true }
+    faults:
+      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 5 }
+    expect: Idempotent producer removes the duplicates seen in F-2 (same session). Compare with F-2.
+
+  - id: F-3b
+    group: F
+    priority: must
+    mode: random
+    patterns: [P3]
+    env: { KAFKA_IDEMPOTENT: true }
+    faults:
+      - { type: withhold_downstream, target: kafka-app, at_s: [10, 10], duration_s: 10 }
+      - { type: crash, target: relay, at_s: [13, 17] }
+    expect: Duplicates despite the idempotent producer — the restarted relay is a new producer session.
+
+  - id: F-4
+    group: F
+    priority: should
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 20
+    faults:
+      - { type: reset_peer, target: kafka-app, at_s: [5, 5], duration_s: 20, params: { toxicity: 0.05 } }
+    sweep: { "faults[0].params.toxicity": [0.05, 0.2] }
+    expect: Flaky connections cause retries and longer windows. (True packet loss would need tc netem; out of scope for v1.)
+
+  - id: F-5
+    group: F
+    priority: should
+    mode: random
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 20
+    faults:
+      - { type: latency, target: pg-app, at_s: [5, 5], duration_s: 20, params: { latency_ms: 50 } }
+    sweep: { "faults[0].params.latency_ms": [50, 200] }
+    expect: Longer transactions, relay lag and throughput cost; no damage expected.
+
+  # ---------------------------------------------------------------------------
+  # G. CONSUMER SIDE (all three strategies consume the same stream in parallel)
+  # ---------------------------------------------------------------------------
+  - id: G-1
+    group: G
+    priority: must
+    mode: targeted
+    patterns: [P3]
+    topology: { consumers: [naive, dedup, upsert] }
+    crash: { component: consumers, point: after_side_effect_before_commit, after_n: 50 }
+    expect: Naive applies the redelivered event twice (double charge); dedup and upsert do not.
+
+  - id: G-2
+    group: G
+    priority: should
+    mode: targeted
+    patterns: [P3]
+    topology: { consumers: [naive, dedup, upsert] }
+    env: { CONSUMER_COMMIT_ORDER: offset_first }
+    crash: { component: consumers, point: after_commit_before_side_effect, after_n: 50 }
+    expect: Committing the offset first loses the effect for every strategy — dedup cannot help.
+
+  - id: G-3
+    group: G
+    priority: must
+    mode: targeted
+    patterns: [P3, P4, P5]
+    topology: { consumers: [naive, dedup, upsert] }
+    by_pattern:
+      P3: { crash: { component: relay, point: after_publish_before_mark, after_n: 20 } }
+      P4: { faults: [ { type: crash, target: connect, at_s: [10, 35] } ] }
+      P5: { faults: [ { type: crash, target: connect, at_s: [10, 35] } ] }
+    expect: Upstream duplicates become business damage only for the naive consumer.
+
+  - id: G-4
+    group: G
+    priority: should
+    mode: random
+    patterns: [P3]
+    topology: { consumers: [naive, dedup, upsert], consumers_per_group: 2 }
+    faults:
+      - { type: pause, target: consumers-member-1, at_s: [10, 20], duration_s: 15 }
+    expect: Rebalance hands partitions to member 2; uncommitted events are reprocessed (naive duplicates).
+
+  # ---------------------------------------------------------------------------
+  # H. COMBINED AND STRESS
+  # ---------------------------------------------------------------------------
+  - id: H-1
+    group: H
+    priority: optional
+    mode: random
+    patterns: [P3, P4]
+    repeats: 20
+    load: { mode: burst, rate_per_s: 100, burst_rate_per_s: 1000, burst_at_s: 10, burst_s: 10 }
+    by_pattern:
+      P3: { faults: [ { type: crash, target: relay, at_s: [12, 18] } ] }
+      P4: { faults: [ { type: crash, target: connect, at_s: [12, 18] } ] }
+    expect: Damage per crash scales with load during the burst.
+
+  - id: H-2
+    group: H
+    priority: optional
+    mode: random
+    patterns: [P4, P5]
+    repeats: 10
+    requires_rebuild: true
+    faults:
+      - { type: failover, target: postgres, at_s: [15, 15] }
+      - { type: crash, target: connect, at_s: [20, 20] }
+    expect: An incident chain is worse than either fault alone.
+
+  - id: H-3
+    group: H
+    priority: optional
+    mode: random
+    patterns: [P3]
+    repeats: 20
+    faults:
+      - { type: crash, target: relay-any, at_s: [5, 15] }
+      - { type: pause, target: relay-any, at_s: [15, 25], duration_s: [2, 8] }
+      - { type: crash, target: relay-any, at_s: [25, 35] }
+    sweep: { topology.relays: [2, 4] }
+    expect: Ordering and duplicate damage under concurrency and mixed faults.
+
+  - id: H-4
+    group: H
+    priority: optional
+    mode: random
+    patterns: [P3]
+    repeats: 20
+    faults:
+      - { type: latency, target: kafka-app, at_s: [5, 5], duration_s: 30, params: { latency_ms: 1000 } }
+      - { type: crash, target: relay, at_s: [10, 30] }
+    expect: Slow acks widen the publish-to-mark window, so crashes duplicate more.
+
+  # ---------------------------------------------------------------------------
+  # I. TUNING SWEEPS
+  # ---------------------------------------------------------------------------
+  - id: I-1
+    group: I
+    priority: should
+    mode: sweep
+    patterns: [P3]
+    repeats: 5
+    load: { duration_s: 120 }
+    sweep: { RELAY_POLL_INTERVAL_MS: [100, 500, 1000, 5000] }
+    expect: Shorter poll interval -> smaller window, higher DB load.
+
+  - id: I-2
+    group: I
+    priority: must
+    mode: alias
+    covered_by: [A-4, A-7]
+    expect: Batch-size trade-off (sweeps in A-4 and A-7).
+
+  - id: I-3
+    group: I
+    priority: must
+    mode: alias
+    covered_by: [E-2]
+    expect: Offset flush interval trade-off (sweep in E-2).
+
+  - id: I-4
+    group: I
+    priority: optional
+    mode: alias
+    covered_by: [C-4]
+    expect: acks trade-off (sweep in C-4).
+
+  - id: I-5
+    group: I
+    priority: should
+    mode: random
+    patterns: [P1]
+    faults:
+      - { type: crash, target: orderservice, at_s: [5, 35] }
+    cells:
+      - { KAFKA_LINGER_MS: 0 }
+      - { KAFKA_LINGER_MS: 5 }
+      - { KAFKA_LINGER_MS: 50 }
+      - { KAFKA_SYNC_SEND: true }
+    expect: lost_after_send grows with linger; synchronous send removes it at a throughput cost.
+
+  # ---------------------------------------------------------------------------
+  # PERFORMANCE (no faults; run all cells on ONE machine)
+  # ---------------------------------------------------------------------------
+  - id: P-1
+    group: perf
+    priority: must
+    mode: sweep
+    patterns: [P1, P2, P3, P4, P5]
+    repeats: 5
+    load: { duration_s: 120 }
+    sweep: { load.rate_per_s: [10, 100, 1000] }
+    expect: Cost of each pattern in latency, throughput and DB CPU (RQ3).

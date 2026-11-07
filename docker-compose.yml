@@ -1,0 +1,128 @@
+# Base stack for the study (SPEC Sections 2, 4, 16). Versions are pinned here;
+# results are only comparable within one pinned stack.
+name: dualwrite
+
+services:
+  postgres-primary:
+    image: postgres:16.15-bookworm
+    init: true
+    mem_limit: 1g
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_DB: shop
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    ports:
+      - "55432:5432" # host access for runner/checker only; bypasses Toxiproxy
+    volumes:
+      - pg-primary:/var/lib/postgresql/data
+      - ./deploy/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./deploy/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP, not the unix socket: the init-time server only listens on the socket.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "shop"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  postgres-replica:
+    image: postgres:16.15-bookworm
+    init: true
+    mem_limit: 1g
+    entrypoint: ["/usr/local/bin/replica-entrypoint.sh"]
+    environment:
+      PGPASSWORD: replicator
+    ports:
+      - "55433:5432"
+    volumes:
+      - pg-replica:/var/lib/postgresql/data
+      - ./deploy/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./deploy/postgres/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "shop"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  broker-1:
+    image: apache/kafka:4.3.2
+    init: true
+    mem_limit: 1536m
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker-1:9091
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # One listener per client class (SPEC 16). A broker answers metadata with
+      # the advertised address of the listener the client arrived on, so APP and
+      # CONNECT need separate ports or Connect would be sent to the app proxy.
+      # HOST is for the runner and checker, which run on the Mac and cannot
+      # resolve the INTERNAL address; it keeps measurement outside every fault.
+      KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29093,CONTROLLER://:9091
+      KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19091,INTERNAL://broker-1:9093,CONNECT://toxiproxy:19191,HOST://localhost:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: APP:PLAINTEXT,INTERNAL:PLAINTEXT,CONNECT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Every topic is created explicitly, so a wrong topic name fails loudly.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    ports:
+      - "29093:29093"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29093"]
+      interval: 5s
+      timeout: 15s
+      retries: 30
+      start_period: 10s
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    init: true
+    mem_limit: 256m
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    ports:
+      - "8474:8474" # control API, used by the runner
+    volumes:
+      - ./deploy/toxiproxy.json:/config/toxiproxy.json:ro
+
+  kafka-connect:
+    image: quay.io/debezium/connect:3.7.0.Final
+    init: true
+    mem_limit: 1536m
+    environment:
+      BOOTSTRAP_SERVERS: toxiproxy:19191
+      GROUP_ID: connect-study
+      CONFIG_STORAGE_TOPIC: connect-configs
+      OFFSET_STORAGE_TOPIC: connect-offsets
+      STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: ${OFFSET_FLUSH_MS:-60000}
+      CONNECT_EXACTLY_ONCE_SOURCE_SUPPORT: ${CONNECT_EOS_WORKER:-disabled}
+      CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY: All
+      HEAP_OPTS: -Xms512m -Xmx1g
+    ports:
+      - "8083:8083"
+    depends_on:
+      broker-1:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/connector-plugins"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+
+volumes:
+  pg-primary:
+  pg-replica:

@@ -1,0 +1,6 @@
+[
+  { "name": "pg-app", "listen": "0.0.0.0:15432", "upstream": "postgres-primary:5432", "enabled": true },
+  { "name": "pg-connect", "listen": "0.0.0.0:15433", "upstream": "postgres-primary:5432", "enabled": true },
+  { "name": "kafka-app-b1", "listen": "0.0.0.0:19091", "upstream": "broker-1:9092", "enabled": true },
+  { "name": "kafka-connect-b1", "listen": "0.0.0.0:19191", "upstream": "broker-1:9094", "enabled": true }
+]
