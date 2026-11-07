@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -46,6 +47,7 @@ func run() error {
 	noConsumers := flag.Bool("no-consumers", false, "trial only: drop consumers; recorded in env_json")
 	only := flag.String("cycles", "", "comma-separated cycle IDs; empty runs all selected")
 	overrides := flag.String("env", "", "trial only: comma-separated KEY=VALUE overrides; recorded in env_json")
+	verify := flag.String("verify", "", "check a results file against the selected cycles and exit")
 	merge := flag.Bool("merge", false, "merge results/results.*.csv into results/results.csv")
 	flag.Parse()
 
@@ -97,8 +99,21 @@ func run() error {
 			cycles[i].Env["TRIAL_NO_CONSUMERS"] = "true"
 		}
 	}
+	if *verify != "" {
+		return verifyResults(*verify, cycles)
+	}
 	if *dryRun {
 		fmt.Print(runner.FormatEstimates(runner.EstimateRun(cycles), *overhead))
+		refused := make(map[string]int)
+		for _, cycle := range cycles {
+			if err := runner.Supported(cycle); err != nil {
+				refused[cycle.VectorID+": "+err.Error()]++
+			}
+		}
+		fmt.Printf("refused: %d kinds\n", len(refused))
+		for _, reason := range slices.Sorted(maps.Keys(refused)) {
+			fmt.Printf("  %4d  %s\n", refused[reason], reason)
+		}
 		return nil
 	}
 	if len(cycles) == 0 {
@@ -167,6 +182,7 @@ func run() error {
 		Host:       host,
 		Versions:   string(versionsJSON),
 		Shard:      shard,
+		Strict:     !*allowDirty,
 		Seed:       *seed,
 		ResultsDir: resultsDir,
 	}, docker, store)
@@ -179,6 +195,22 @@ func run() error {
 	}
 	slog.Info("run started", "cycles", len(cycles), "commit", commit, "results", path)
 	return r.Run(ctx, cycles)
+}
+
+func verifyResults(path string, cycles []runner.Cycle) error {
+	summary, err := runner.Verify(path, cycles)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("rows: %d\ncommits: %v\nimage version sets: %d\nstatuses: %v\nmissing cycles: %d of %d\n",
+		summary.Rows, summary.Commits, summary.Versions, summary.Statuses, len(summary.Missing), len(cycles))
+	for _, problem := range summary.Problems {
+		fmt.Println("PROBLEM:", problem)
+	}
+	if len(summary.Problems) > 0 {
+		return errors.New("results file is not usable for the paper")
+	}
+	return nil
 }
 
 func split(list string) []string {

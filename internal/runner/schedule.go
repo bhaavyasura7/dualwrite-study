@@ -24,6 +24,7 @@ const (
 	replicaDSN      = "postgres://app:app@localhost:55433/shop"
 	rebuildTimeout  = 180 * time.Second
 	failoverNetwork = "dualwrite_failover"
+	minDockerMemory = 11 << 30
 )
 
 // uniform draws from the range using the cycle's random source.
@@ -513,6 +514,47 @@ func (r *Runner) restartPGProxy(ctx context.Context) error {
 	return r.docker.Start(ctx, pgProxy)
 }
 
+// setIdleTimeout applies PG_IDLE_TX_TIMEOUT_S, which B-2 depends on.
+func setIdleTimeout(ctx context.Context, conn *pgx.Conn, seconds string) error {
+	if _, err := strconv.Atoi(seconds); err != nil {
+		return fmt.Errorf("PG_IDLE_TX_TIMEOUT_S: %w", err)
+	}
+	if _, err := conn.Exec(ctx, "ALTER SYSTEM SET idle_in_transaction_session_timeout = '"+seconds+"s'"); err != nil {
+		return fmt.Errorf("set idle timeout: %w", err)
+	}
+	return reloadConfig(ctx, conn)
+}
+
+// reloadConfig makes ALTER SYSTEM settings take effect.
+func reloadConfig(ctx context.Context, conn *pgx.Conn) error {
+	if _, err := conn.Exec(ctx, `SELECT pg_reload_conf()`); err != nil {
+		return fmt.Errorf("reload config: %w", err)
+	}
+	return nil
+}
+
+// strictChecks enforces the machine side of the pre-run checklist.
+func (r *Runner) strictChecks(ctx context.Context) error {
+	memory, err := r.docker.MemoryBytes(ctx)
+	if err != nil {
+		return err
+	}
+	if memory < minDockerMemory {
+		return fmt.Errorf("docker has %d GB, need about 12", memory>>30)
+	}
+	power, err := exec.CommandContext(ctx, "pmset", "-g", "batt").Output()
+	if err != nil {
+		return fmt.Errorf("read power source: %w", err)
+	}
+	if !strings.Contains(string(power), "AC Power") {
+		return errors.New("the Mac is on battery; plug it in")
+	}
+	if load := hostLoad(); load > r.measurement.PrecheckMaxHostLoad {
+		return fmt.Errorf("host load is %.1f; the Mac must be idle", load)
+	}
+	return nil
+}
+
 // setReplication switches between asynchronous and synchronous commit (D-4).
 func setReplication(ctx context.Context, conn *pgx.Conn, mode string) error {
 	standby := ""
@@ -521,9 +563,6 @@ func setReplication(ctx context.Context, conn *pgx.Conn, mode string) error {
 	}
 	if _, err := conn.Exec(ctx, "ALTER SYSTEM SET synchronous_standby_names = "+"'"+standby+"'"); err != nil {
 		return fmt.Errorf("set replication mode: %w", err)
-	}
-	if _, err := conn.Exec(ctx, `SELECT pg_reload_conf()`); err != nil {
-		return fmt.Errorf("reload config: %w", err)
 	}
 	return nil
 }

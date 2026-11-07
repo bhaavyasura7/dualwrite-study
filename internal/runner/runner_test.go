@@ -237,3 +237,26 @@ func TestConnectorConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestVerify(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "results.csv")
+	results := &Results{path: path, done: map[string]struct{}{}}
+	dirty := row("a", "abc-dirty")
+	dirty.Status = "OK"
+	for _, r := range []Row{dirty, dirty, row("b", "def")} {
+		if err := results.Append(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Verify(path, []Cycle{{ID: "a"}, {ID: "b"}, {ID: "c"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rows != 3 || len(got.Missing) != 1 || got.Missing[0] != "c" {
+		t.Fatalf("got %+v", got)
+	}
+	want := []string{"rows from a dirty tree: abc-dirty", "2 commits in one file", "cycle appears twice: a"}
+	if strings.Join(got.Problems, "|") != strings.Join(want, "|") {
+		t.Fatalf("problems = %q", got.Problems)
+	}
+}

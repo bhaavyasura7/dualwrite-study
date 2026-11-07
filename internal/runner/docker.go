@@ -149,6 +149,15 @@ func (d *Docker) ConnectAlias(ctx context.Context, networkName, name, alias stri
 	return nil
 }
 
+// MemoryBytes is the memory Docker's VM has.
+func (d *Docker) MemoryBytes(ctx context.Context) (int64, error) {
+	info, err := d.cli.Info(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("docker info: %w", err)
+	}
+	return info.MemTotal, nil
+}
+
 // EnvValue reads one variable from the container's configuration.
 func (d *Docker) EnvValue(ctx context.Context, name, key string) (string, error) {
 	info, err := d.cli.ContainerInspect(ctx, name)

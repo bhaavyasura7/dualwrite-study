@@ -72,6 +72,7 @@ var ErrControlFailed = errors.New("control assert failed")
 type Options struct {
 	RunID, GitCommit, Host, Versions string
 	Shard                            Shard
+	Strict                           bool // final runs: enforce the pre-run checklist (SPEC 14.5)
 	Seed                             uint64
 	ResultsDir                       string
 }
@@ -173,6 +174,11 @@ func (r *Runner) Preflight(ctx context.Context) error {
 	for _, topic := range names {
 		if detail, ok := topics[topic]; !ok || detail.Err != nil {
 			return fmt.Errorf("topic %s is missing; recreate kafka-connect (docker compose rm -sfv kafka-connect && make up)", topic)
+		}
+	}
+	if r.opts.Strict {
+		if err := r.strictChecks(ctx); err != nil {
+			return err
 		}
 	}
 	var disk syscall.Statfs_t
@@ -298,6 +304,10 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	loadConfig := r.baseLoad
 	loadConfig.Mode, loadConfig.Rate, loadConfig.Seed = cycle.Load.Mode, cycle.Load.RatePerS, seed
 	loadConfig.Duration = 0
+	loadConfig.BurstRate = cycle.Load.BurstRatePerS
+	// Burst times share the clock of fault times: they start when warm-up ends.
+	loadConfig.BurstAt = time.Duration(cycle.Load.WarmupS+cycle.Load.BurstAtS) * time.Second
+	loadConfig.BurstLength = time.Duration(cycle.Load.BurstS) * time.Second
 	loadConfig.Warmup = time.Duration(cycle.Load.WarmupS) * time.Second
 	cpuBefore, cpuErr := r.docker.CPU(ctx, primary)
 	session := load.Start(loadCtx, loadConfig)
@@ -580,6 +590,9 @@ func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
 	}
 	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
 	if err := setReplication(ctx, conn, cycle.Topology.Replication); err != nil {
+		return err
+	}
+	if err := setIdleTimeout(ctx, conn, cycle.Env["PG_IDLE_TX_TIMEOUT_S"]); err != nil {
 		return err
 	}
 	_, err = conn.Exec(ctx, `TRUNCATE orders, orders_history, outbox, consumer.payments_naive,

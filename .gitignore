@@ -1,5 +1,4 @@
 results/*
-!results/results.csv
 figures/
 .DS_Store
 .venv/

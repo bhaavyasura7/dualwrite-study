@@ -1,6 +1,6 @@
 # =============================================================================
 # Test catalogue — Fault-Injection Study of Database–Kafka Consistency Patterns
-# File: experiments/vectors.yaml   ·   Spec version 2.1   ·   November 2026
+# File: experiments/vectors.yaml   ·   Spec version 2.3   ·   November 2026
 # =============================================================================
 #
 # SCHEMA
@@ -89,6 +89,7 @@
 #
 # TIMING
 #   Load runs: warm-up -> faults -> until last fault recovered + post_fault_s.
+#   at_s and burst_at_s both count from the end of warm-up.
 #   Vectors without faults use load.duration_s instead.
 # =============================================================================
 

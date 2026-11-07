@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 2.1 · November 2026"
+subtitle: "Go implementation · version 2.3 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -86,7 +86,7 @@ dualwrite-study/
 │   └── obs/                # slog setup, log markers, timing helpers
 ├── experiments/
 │   └── vectors.yaml        # the test catalogue
-├── results/                # results.csv, damage/, logs/ (git-ignored except CSV)
+├── results/                # results.csv, damage/, logs/ (git-ignored; backed up to dualwrite-results)
 └── analysis/               # Python notebooks and plotting scripts
 ```
 
@@ -612,7 +612,31 @@ make run-all               # full catalogue (multi-day; use caffeinate -i on mac
 make run-all SHARD=2/4     # this laptop's share of the catalogue (see below)
 make merge                 # combine results/*.csv from all laptops into results.csv
 make report                # run analysis scripts → figures/
+make verify                # check a results file before using it
+make backup                # push results/ to the private results repo
+make demo                  # one crash cycle end to end
 ```
+
+## 14.5 Pre-run checklist
+
+Before any run used for results:
+
+| Item | Checked by |
+|---|---|
+| Clean git tree | Runner (refuses) |
+| Docker memory about 12 GB | Runner (refuses) |
+| Mac on AC power | Runner (refuses) |
+| Host load below `PRECHECK_MAX_HOST_LOAD` | Runner (refuses) |
+| Connect's internal topics present | Runner (refuses) |
+| At least 20 GB free disk | Runner (refuses) |
+| Same commit and image digests on every laptop | `make merge` (refuses to mix them) |
+| `make accept` passed on this commit | Person running it |
+| Mac idle, lid open, on a hard surface, kept cool | Person running it |
+| Backup configured and tested (`make backup`) | Person running it |
+
+`-allow-dirty` marks a run as a trial and skips the machine checks.
+
+**Backups.** Results go to a separate private repo (`dualwrite-results`), one folder per host. They are kept apart from the code because a commit in the code repo would change the hash recorded in running cycles, and the runner refuses to mix commits in one file.
 
 # 15. Load generator (`cmd/loadgen`) and analysis
 
@@ -681,7 +705,7 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 2.1
+# 20. Changes in versions 1.1 to 2.3
 
 | # | Area | Change |
 |---|---|---|
@@ -739,3 +763,6 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 52 | 9.3 | (2.1) Debezium retry wait recorded and reported with recovery times |
 | 53 | 15 | (2.1) Loss metrics reported as distributions |
 | 54 | 17 | (2.1) `make accept` and a commit script that refuses to commit on failure |
+| 55 | 14.5 | (2.2) Pre-run checklist, mostly enforced by the runner |
+| 56 | 14.1 | (2.2) `burst_at_s` counts from the end of warm-up; `PG_IDLE_TX_TIMEOUT_S` applied per cycle |
+| 57 | 14.4, 14.5 | (2.3) `make verify`, `make backup`, `make demo`; results in a separate private repo |

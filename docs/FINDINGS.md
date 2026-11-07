@@ -8,6 +8,44 @@ Running record for the paper. Every entry names its evidence, so a claim can be 
 
 Trial data lives in `experiments/trials/`, the scripts that analysed it in `analysis/diagnostics/`.
 
+## Surprises log
+
+Each unexpected result, kept for the paper's findings. Status: **confirmed** means the cause was shown by a direct test, **likely** means the evidence fits but a test is missing, **open** means the cause is unknown.
+
+| # | Surprise | Suspected cause | How checked | Status | Entry |
+|---|---|---|---|---|---|
+| 1 | Delivery timeout did not fire during a proxy cut or broker stop | Timeout is only evaluated around writing a request | Outage matrix over 4 outage types | Likely; holds for cut and stop, not for resets | F1, F11 |
+| 2 | 8.8 s delivery with a 5 s timeout | Idempotence holds records of unknown outcome. Our first guess, a long in-flight request, was wrong | Trace, then idempotence on and off | Confirmed in 2 runs per setting | F2 |
+| 3 | P2 lost nothing in short outages | Retries run after Kafka returns. Our guess that they never run was wrong | Outage matrix | Confirmed for 8 s outages | F12 |
+| 4 | Retries reorder events (156–500 per outage) | A retried older version lands after a newer one | Outage matrix | Likely; H-REORDER will test it | F12 |
+| 5 | Same 8 s cut lost 0 or about 1,500 | Whether requests were in flight when the connection died | Not tested | Open | F24 |
+| 6 | Configured batch size hardly matters above about 100 | Effective batch follows arrivals | Poll-interval sweep | Likely; H-BATCH will test it | F15 |
+| 7 | CDC window of about 530 ms | `poll.interval.ms`; the maximum of about twice the interval suggests two polling stages | Poll 100 against 500 | Proportionality confirmed; two stages inferred | F14 |
+| 8 | About 1,900 lost in some CDC failovers | Debezium's 10 s retry wait delays connector deletion | Connect logs: 3 waits in 3 affected cycles | Confirmed | F19 |
+| 9 | Those cycles also lost 12–84 events from before failover | Not known | Not tested | Open | F19 |
+| 10 | Snapshot recovery still loses events | A snapshot holds only latest state | All 851 lost events were intermediate versions | Confirmed | F19 |
+| 11 | No ghosts in D-1 at first | Replication lag near zero at this load | 200 ms of injected lag gave 16–23 ghosts | Confirmed | F20 |
+| 12 | Pre-cycle latency blips with the Mac idle | Not known | Not tested | Open | F17 |
+| 13 | G-4 showed no naive duplicates | Per-record commits leave at most one event uncommitted | One cycle only | Open | F25 |
+
+## Harness bugs
+
+Bugs in our own test setup, for the method section. None reached study data, because none exists yet.
+
+| # | Bug | What it would have distorted | How found |
+|---|---|---|---|
+| 1 | Broker recreated without a volume, so Connect's topics vanished and it logged 20 MB/s | All timing data; p99 about 15× too high; disk full | 4 failed cycles, then disk inspection |
+| 2 | Crash fired at 0.35 s, inside warm-up | Collateral loss about 10× too high | In-flight logs |
+| 3 | Connect flush setting overwritten by the image's entrypoint | Every E-2 and E-3 sweep cell would have run at 60 s | Duplicates far above expectation |
+| 4 | Connector names reused across attempts | Retried cycles fail to start | `FAILED_START`, Connect logs |
+| 5 | Toxiproxy's accept loop blocked by a dial to a dead address | Failover downtime inflated; cycles ran idle yet reported OK | Event counts too low |
+| 6 | 60 s relay timeout against the order service's 5 s | P3 recovery about 100× too slow | Recovery times out of line |
+| 7 | Stale three-broker volume kept by `down -v` | Quorum crash | Regression run |
+| 8 | Dead broker ports among measurement seeds | Random `FAILED_CHECK` | Failed cycles |
+| 9 | F-4 and F-5 did not reach Debezium | CDC would have looked immune to flaky networks | Zero effect on P4 |
+| 10 | `PG_IDLE_TX_TIMEOUT_S` never applied | Changing it would have done nothing | Audit of catalogue settings against code |
+| 11 | H-1's burst settings not passed, and burst timed from load start | The crash would have missed the burst | Same audit |
+
 ## Stack for all entries below
 
 Postgres 16.15, Kafka 4.3.2, Debezium 3.7.0.Final, Toxiproxy 2.13.0, franz-go 1.22.2, pgx 5.12.0, Go 1.27. Apple Silicon Mac, 16 GB, Docker VM 7.7 GB. P1, 100 orders/s (about 178 changes/s), `acks=all`, linger 5 ms, delivery timeout 5 s, request timeout 3 s, overhead 1 s.

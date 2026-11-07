@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all merge
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all merge verify backup demo
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -46,3 +46,13 @@ run-all: ## run the catalogue; SHARD=i/n runs this laptop's share
 
 merge: ## combine results/results.*.csv from all laptops into results.csv
 	go run ./cmd/runner -merge
+
+verify: ## check a results file: make verify FILE=results/results.csv
+	go run ./cmd/runner -verify $(or $(FILE),results/results.csv)
+
+backup: ## push results/ to the private results repo
+	./deploy/backup.sh
+
+demo: up ## one crash cycle end to end; writes results/demo.csv
+	go run ./cmd/runner -cycles A-1_P1_r01 -allow-dirty -results results/demo.csv
+	@cat results/demo.csv | cut -d, -f2,10,16,17,18 | column -s, -t

@@ -1,0 +1,158 @@
+go vet ./...
+go test ./... -count=1
+?   	dualwrite-study/cmd/checker	[no test files]
+?   	dualwrite-study/cmd/consumer	[no test files]
+?   	dualwrite-study/cmd/loadgen	[no test files]
+ok  	dualwrite-study/cmd/orderservice	0.893s
+?   	dualwrite-study/cmd/relay	[no test files]
+?   	dualwrite-study/cmd/runner	[no test files]
+ok  	dualwrite-study/internal/checker	3.775s
+ok  	dualwrite-study/internal/config	0.444s
+ok  	dualwrite-study/internal/crash	2.825s
+ok  	dualwrite-study/internal/events	3.260s
+ok  	dualwrite-study/internal/faults	1.803s
+ok  	dualwrite-study/internal/load	2.344s
+ok  	dualwrite-study/internal/obs	1.303s
+?   	dualwrite-study/internal/patterns	[no test files]
+?   	dualwrite-study/internal/publish	[no test files]
+ok  	dualwrite-study/internal/runner	4.171s
+?   	dualwrite-study/internal/store	[no test files]
+golangci-lint run ./...
+0 issues.
+./deploy/smoke.sh
+ok    wal_level is logical
+ok    idle_in_transaction timeout
+ok    commit timestamps on primary
+ok    commit timestamps on replica
+ok    replica in recovery
+ok    replica streaming
+ok    row replicated
+ok    history trigger fired
+ok    commit time readable on replica
+ok    postgres via toxiproxy:15432
+ok    postgres via toxiproxy:15433
+ok    kafka keeps client on proxy 19091
+ok    kafka keeps client on proxy 19191
+ok    app clients cut off when kafka-app disabled
+ok    connect clients unaffected by kafka-app fault
+ok    kafka round trip
+ok    debezium postgres plugin loaded
+ok    6 services running
+
+arch arm64  apache/kafka:4.3.2
+arch arm64  ghcr.io/shopify/toxiproxy:2.13.0
+arch arm64  postgres:16.15-bookworm
+arch arm64  quay.io/debezium/connect:3.7.0.Final
+./deploy/smoke-order.sh
+ Container dualwrite-orderservice-1 Healthy 
+ok    illegal transition refused
+ok    unknown order refused
+ok    bad amount refused
+ok    orders in postgres
+ok    versions in history
+ Container dualwrite-orderservice-1 Stopped 
+ok    clean exit on SIGTERM
+ok    shutdown completed
+ok    kafka matches postgres exactly
+ok    SENT_CALLED per event
+ok    SEND_ACKED per event
+ok    no SEND_FAILED
+ok    fields on every log line
+ Container dualwrite-orderservice-1 Healthy 
+ok    postgres path goes through pg-app
+ok    commit succeeds with kafka cut (dual write)
+ok    kafka failure reaches the app
+info  SEND_FAILED after 5s (delivery timeout is 5s)
+./deploy/smoke-checker.sh
+ok  	dualwrite-study/internal/checker	0.333s
+--- no-fault cycle: 100 orders/s for 30 s
+ Container dualwrite-orderservice-1 Healthy 
+{"orders":3000,"requests":5369,"failed":0,"throughput_ops":176.38421315492158,"latency_p50_ms":1.424375,"latency_p99_ms":20.037042,"duration_s":30.439232083}
+{"orders_total":3000,"events_total":5369,"lost":0,"ghost":0,"duplicates":0,"out_of_order":0,"stale_redelivery":0,"lost_after_send":0,"lost_after_ack":0,"hooked_lost":0,"hooked_dup":0,"hooked_ghost":0,"collateral_lost":0,"collateral_dup":0,"send_failed":0,"inflight_at_crash":0,"oldest_pending_ms":0,"relay_batches":0,"batch_rows_mean":0,"batch_rows_max":0,"window_p50_ms":5.387,"window_p99_ms":12.022,"window_max_ms":101.898}
+ok    no failed requests
+ok    clean: lost
+ok    clean: ghost
+ok    clean: duplicates
+ok    clean: out_of_order
+ok    clean: lost_after_send
+ok    clean: send_failed
+ok    checker saw every order
+ok    checker saw every version
+--- damaged cycle: Kafka cut for 8 s during load
+ Container dualwrite-orderservice-1 Healthy 
+{"orders_total":2500,"events_total":4470,"lost":1573,"ghost":0,"duplicates":0,"out_of_order":0,"stale_redelivery":0,"lost_after_send":1573,"lost_after_ack":0,"hooked_lost":0,"hooked_dup":0,"hooked_ghost":0,"collateral_lost":1573,"collateral_dup":0,"send_failed":1573,"inflight_at_crash":0,"oldest_pending_ms":0,"relay_batches":0,"batch_rows_mean":0,"batch_rows_max":0,"window_p50_ms":5.464,"window_p99_ms":7.374,"window_max_ms":25.475}
+ok    outage produced lost events (1573)
+ok    every loss has a SEND_FAILED marker
+ok    lost events were all sent to the producer
+ok    no ghosts
+ok    damage file lists each loss
+--- guard: a topic without broker timestamps is refused
+ok    CreateTime topic refused
+evidence in /var/folders/m8/y5vfxh7j7vnck1qmzs7fdq2c0000gn/T/tmp.ZJOhG1xtPd
+./deploy/smoke-crash.sh
+--- exact cases: crash on the 50th sequential order, then 10 orders after recovery
+ok    a1: died by SIGKILL
+ok    a1: marker logged once
+ok    a1: no graceful shutdown
+ok    a1: committed versions
+ok    a1: lost
+ok    a1: hooked_lost
+ok    a1: collateral_lost
+ok    a1: lost_after_send
+ok    a1: ghost
+ok    a1: duplicates
+ok    a2: died by SIGKILL
+ok    a2: marker logged once
+ok    a2: no graceful shutdown
+ok    a2: committed versions
+ok    a2: lost
+ok    a2: hooked_lost
+ok    a2: collateral_lost
+ok    a2: lost_after_send
+ok    a2: ghost
+ok    a2: duplicates
+ok    a8_async: died by SIGKILL
+ok    a8_async: marker logged once
+ok    a8_async: no graceful shutdown
+ok    a8_async: committed versions
+ok    a8_async: lost
+ok    a8_async: hooked_lost
+ok    a8_async: collateral_lost
+ok    a8_async: lost_after_send
+ok    a8_async: ghost
+ok    a8_async: duplicates
+ok    a8_sync: died by SIGKILL
+ok    a8_sync: marker logged once
+ok    a8_sync: no graceful shutdown
+ok    a8_sync: committed versions
+ok    a8_sync: lost
+ok    a8_sync: hooked_lost
+ok    a8_sync: collateral_lost
+ok    a8_sync: lost_after_send
+ok    a8_sync: ghost
+ok    a8_sync: duplicates
+--- A-1 under load: 100 orders/s, three runs
+ok    load1: died by SIGKILL
+ok    load1: marker logged once
+ok    load1: no graceful shutdown
+ok    load1: hooked event lost
+ok    load1: no ghosts or duplicates
+ok     lost=1 none acknowledged
+info  load1: lost=1 collateral=0 lost_after_send=0
+ok    load2: died by SIGKILL
+ok    load2: marker logged once
+ok    load2: no graceful shutdown
+ok    load2: hooked event lost
+ok    load2: no ghosts or duplicates
+ok     lost=2 none acknowledged
+info  load2: lost=2 collateral=1 lost_after_send=1
+ok    load3: died by SIGKILL
+ok    load3: marker logged once
+ok    load3: no graceful shutdown
+ok    load3: hooked event lost
+ok    load3: no ghosts or duplicates
+ok     lost=1 none acknowledged
+info  load3: lost=1 collateral=0 lost_after_send=0
+evidence in /var/folders/m8/y5vfxh7j7vnck1qmzs7fdq2c0000gn/T/tmp.snGEdXmZO5
+acceptance passed
+110b530 Milestone 8: consumers, lost_after_ack and the acceptance gate, spec v2.1

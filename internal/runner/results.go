@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"dualwrite-study/internal/checker"
@@ -268,4 +270,56 @@ func sortedKeys(m map[string]int) []string {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+// Summary describes a results file.
+type Summary struct {
+	Rows     int
+	Statuses map[string]int
+	Commits  []string
+	Versions int
+	Missing  []string // catalogue cycles without a row
+	Problems []string // anything that makes the file unusable for the paper
+}
+
+// Verify checks a results file against the expected cycles.
+func Verify(path string, expected []Cycle) (Summary, error) {
+	rows, err := readRows(path)
+	if err != nil {
+		return Summary{}, err
+	}
+	summary := Summary{Rows: len(rows), Statuses: make(map[string]int)}
+	seen := make(map[string]int)
+	commits := make(map[string]struct{})
+	versions := make(map[string]struct{})
+	for _, row := range rows {
+		summary.Statuses[row["status"]]++
+		seen[row["cycle_id"]]++
+		commits[row["git_commit"]] = struct{}{}
+		versions[row["versions_json"]] = struct{}{}
+	}
+	summary.Commits = slices.Sorted(maps.Keys(commits))
+	summary.Versions = len(versions)
+	for _, commit := range summary.Commits {
+		if strings.HasSuffix(commit, "-dirty") {
+			summary.Problems = append(summary.Problems, "rows from a dirty tree: "+commit)
+		}
+	}
+	if len(summary.Commits) > 1 {
+		summary.Problems = append(summary.Problems, fmt.Sprintf("%d commits in one file", len(summary.Commits)))
+	}
+	if summary.Versions > 1 {
+		summary.Problems = append(summary.Problems, fmt.Sprintf("%d image version sets in one file", summary.Versions))
+	}
+	for _, id := range slices.Sorted(maps.Keys(seen)) {
+		if seen[id] > 1 {
+			summary.Problems = append(summary.Problems, "cycle appears twice: "+id)
+		}
+	}
+	for _, cycle := range expected {
+		if seen[cycle.ID] == 0 {
+			summary.Missing = append(summary.Missing, cycle.ID)
+		}
+	}
+	return summary, nil
 }
