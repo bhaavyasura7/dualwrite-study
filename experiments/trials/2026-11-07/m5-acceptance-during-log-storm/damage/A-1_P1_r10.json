@@ -1,0 +1,17 @@
+{
+  "lost": [
+    {
+      "order": "db87c569-e7bc-4d73-b4bd-777b084c50a2",
+      "seq": 2
+    },
+    {
+      "order": "e0b26a40-0546-442e-89b1-cfbacf4cfcb9",
+      "seq": 1
+    }
+  ],
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": null
+}

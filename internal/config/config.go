@@ -94,7 +94,8 @@ type LoadGen struct {
 	Target         string        // LOAD_TARGET, default http://localhost:8080
 	Mode           string        // LOAD_MODE, constant or burst, default constant
 	Rate           int           // LOAD_RATE_PER_S, default 100
-	Duration       time.Duration // LOAD_DURATION_S, default 40
+	Duration       time.Duration // LOAD_DURATION_S, default 40; 0 runs until cancelled
+	Warmup         time.Duration // LOAD_WARMUP_S, default 0; excluded from latency and throughput
 	BurstRate      int           // LOAD_BURST_RATE_PER_S, default 10x the rate
 	BurstAt        time.Duration // LOAD_BURST_AT_S, default 10
 	BurstLength    time.Duration // LOAD_BURST_S, default 10
@@ -112,6 +113,7 @@ func LoadLoadGen() (LoadGen, error) {
 		Mode:           str("LOAD_MODE", "constant"),
 		Rate:           rate,
 		Duration:       seconds("LOAD_DURATION_S", 40, &errs),
+		Warmup:         seconds("LOAD_WARMUP_S", 0, &errs),
 		BurstRate:      integer("LOAD_BURST_RATE_PER_S", 10*rate, &errs),
 		BurstAt:        seconds("LOAD_BURST_AT_S", 10, &errs),
 		BurstLength:    seconds("LOAD_BURST_S", 10, &errs),

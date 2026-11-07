@@ -1,0 +1,8 @@
+total 62835512
+drwxrwxrwx 2 kafka kafka        4096 Nov  7 02:00 .
+drwxrwxrwx 1 kafka kafka        4096 Nov  5 01:25 ..
+-rw-r--r-- 1 kafka kafka 20832015135 Nov  7 02:26 connect-service.log
+-rw-r--r-- 1 kafka kafka      164650 Nov  7 00:59 connect-service.log.2026-11-07-00
+-rw-r--r-- 1 kafka kafka 43511347240 Nov  7 01:59 connect-service.log.2026-11-07-01
+387:2026-11-07T01:05:57,287 WARN   ||  [Consumer clientId=connect-study-offsets, groupId=connect-study] Received unknown topic or partition error in fetch for partition connect-offsets-10   [org.apach
+1667

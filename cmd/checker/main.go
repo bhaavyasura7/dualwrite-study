@@ -8,11 +8,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"dualwrite-study/internal/checker"
 	"dualwrite-study/internal/config"
@@ -39,36 +38,23 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	measurement := config.LoadMeasurement()
-	conn, err := pgx.Connect(ctx, measurement.PostgresDSN)
-	if err != nil {
-		return fmt.Errorf("connect to postgres: %w", err)
-	}
-	defer func() { _ = conn.Close(context.Background()) }()
-
-	var in checker.Input
-	if in.DB, in.PaidOrders, err = checker.ReadDB(ctx, conn); err != nil {
-		return err
-	}
-	if *consumers != "" {
-		if in.Payments, err = checker.ReadPayments(ctx, conn, strings.Split(*consumers, ",")); err != nil {
-			return err
-		}
-	}
-	if in.Kafka, err = checker.ReadKafka(ctx, measurement.KafkaBrokers, "orders."+*cycle); err != nil {
-		return err
-	}
+	var logReader io.Reader
 	if *logs != "" {
 		file, err := os.Open(*logs)
 		if err != nil {
 			return fmt.Errorf("open logs: %w", err)
 		}
-		defer file.Close()
-		evidence, err := checker.ParseLogs(file)
-		if err != nil {
-			return err
-		}
-		in.Sent, in.Hooked, in.SendFailed = evidence.Sent, evidence.Hooked, evidence.SendFailed
+		defer func() { _ = file.Close() }()
+		logReader = file
+	}
+	var strategies []string
+	if *consumers != "" {
+		strategies = strings.Split(*consumers, ",")
+	}
+	measurement := config.LoadMeasurement()
+	in, err := checker.Collect(ctx, measurement.PostgresDSN, measurement.KafkaBrokers, "orders."+*cycle, logReader, strategies)
+	if err != nil {
+		return err
 	}
 
 	result, damage := checker.Check(in)

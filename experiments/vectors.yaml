@@ -1,6 +1,6 @@
 # =============================================================================
 # Test catalogue — Fault-Injection Study of Database–Kafka Consistency Patterns
-# File: experiments/vectors.yaml   ·   Spec version 1.3   ·   November 2026
+# File: experiments/vectors.yaml   ·   Spec version 1.5   ·   November 2026
 # =============================================================================
 #
 # SCHEMA
@@ -30,6 +30,8 @@
 # crash         Targeted crash point: {component, point, after_n, instance}.
 #               Sets CRASH_AT / CRASH_AFTER_N on that component (all replicas
 #               unless `instance` is given). Component dies via SIGKILL.
+#               Armed after warm-up; the firing point is drawn from
+#               [after_n, 2 x after_n] per cycle (SPEC 7).
 # stall         Targeted stall point: {component, point, ms, after_n, instance}.
 #               The goroutine at that line sleeps `ms`, then continues
 #               (deterministic stand-in for a GC pause; see SPEC 7.2).

@@ -1,0 +1,13 @@
+{
+  "lost": [
+    {
+      "order": "08ca6e0f-bc3f-4843-91e6-ed7e04bf287d",
+      "seq": 1
+    }
+  ],
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": null
+}

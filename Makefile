@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test run run-all merge
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -30,3 +30,12 @@ smoke-crash: ## verify the Milestone 4 acceptance criteria (real crashes, exact 
 test:
 	go vet ./...
 	go test ./...
+
+run: ## run selected vectors: make run VECTORS=A-1 ARGS="-patterns P1"
+	go run ./cmd/runner -vectors "$(VECTORS)" $(ARGS)
+
+run-all: ## run the catalogue; SHARD=i/n runs this laptop's share
+	go run ./cmd/runner $(if $(SHARD),-shard $(SHARD)) $(ARGS)
+
+merge: ## combine results/results.*.csv from all laptops into results.csv
+	go run ./cmd/runner -merge

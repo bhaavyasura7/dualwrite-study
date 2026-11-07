@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"sync/atomic"
 	"syscall"
@@ -17,17 +18,35 @@ import (
 const defaultAfterN = 50
 
 var (
+	waiting   atomic.Bool // true until the arming signal arrives
 	hits      atomic.Int64
 	stallHits atomic.Int64
 	kill      = func() { _ = syscall.Kill(os.Getpid(), syscall.SIGKILL) }
 	sleep     = time.Sleep
 )
 
+// Setup holds all crash and stall points until SIGUSR1 if ARM_ON_SIGNAL is true.
+// The runner sends the signal when warm-up ends, so points fire in steady state
+// and counts start from that moment. Without it, points are live at once.
+func Setup() {
+	if os.Getenv("ARM_ON_SIGNAL") != "true" {
+		return
+	}
+	waiting.Store(true)
+	armed := make(chan os.Signal, 1)
+	signal.Notify(armed, syscall.SIGUSR1)
+	go func() {
+		<-armed
+		waiting.Store(false)
+		slog.Info(obs.Armed)
+	}()
+}
+
 // Point kills the process immediately if CRASH_AT equals name, on the
 // CRASH_AFTER_N-th time the point is reached. attrs identify the event(s) being
 // processed at this line, so the checker can separate hooked from collateral damage.
 func Point(name string, attrs ...slog.Attr) {
-	if name == "" || name != os.Getenv("CRASH_AT") {
+	if name == "" || name != os.Getenv("CRASH_AT") || waiting.Load() {
 		return
 	}
 	if hits.Add(1) != afterN("CRASH_AFTER_N") {
@@ -42,7 +61,7 @@ func Point(name string, attrs ...slog.Attr) {
 // STALL_AFTER_N-th time the point is reached (SPEC 7.2). The client libraries'
 // background goroutines keep running, unlike under docker pause.
 func Stall(name string, attrs ...slog.Attr) {
-	if name == "" || name != os.Getenv("STALL_AT") {
+	if name == "" || name != os.Getenv("STALL_AT") || waiting.Load() {
 		return
 	}
 	if stallHits.Add(1) != afterN("STALL_AFTER_N") {

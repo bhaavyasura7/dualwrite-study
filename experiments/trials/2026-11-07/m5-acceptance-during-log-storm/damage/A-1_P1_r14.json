@@ -1,0 +1,106 @@
+{
+  "lost": [
+    {
+      "order": "0caf5d6c-9ab5-4ebd-9e32-439eb4617ed4",
+      "seq": 2
+    },
+    {
+      "order": "0e2362bf-e0d0-4869-8fd0-f211ae86bd38",
+      "seq": 1
+    },
+    {
+      "order": "1ba95cf1-fda0-49cd-8854-4a010a0ccfd9",
+      "seq": 2
+    },
+    {
+      "order": "3a088f3c-dccc-41b1-912d-27c14845e25e",
+      "seq": 2
+    },
+    {
+      "order": "3adf128e-ccd5-4e94-9693-286bbe8a3948",
+      "seq": 1
+    },
+    {
+      "order": "4bed8cf9-0332-41b6-a3ae-288d9f8aff0a",
+      "seq": 1
+    },
+    {
+      "order": "51576139-6dd6-4f44-ab56-35451178b030",
+      "seq": 1
+    },
+    {
+      "order": "5481d38d-6fc5-4a97-b97e-d6f2fd69b6d0",
+      "seq": 1
+    },
+    {
+      "order": "5df82584-772f-4751-8909-bcc0e988fb49",
+      "seq": 1
+    },
+    {
+      "order": "7f9a7bda-1686-4ed8-91b3-545abd4e1e72",
+      "seq": 1
+    },
+    {
+      "order": "84bb461c-b46d-4a64-a1af-d4e6b0534efc",
+      "seq": 1
+    },
+    {
+      "order": "aa156c0e-4353-4a17-a58a-220d49608f27",
+      "seq": 1
+    },
+    {
+      "order": "b52c9cd5-f1fc-4f41-a714-9699be9bd275",
+      "seq": 1
+    },
+    {
+      "order": "ba0f1c7c-1790-4637-9dd3-07d1c221c5f7",
+      "seq": 1
+    },
+    {
+      "order": "bf7541b9-d15f-4319-a22e-108e2fa1bc76",
+      "seq": 1
+    },
+    {
+      "order": "cf28a293-96dc-4bef-9cb0-e81a44302ed6",
+      "seq": 1
+    },
+    {
+      "order": "f9b97883-e98d-4b3a-8426-848a0caa458d",
+      "seq": 1
+    },
+    {
+      "order": "fdd52d79-547c-40ee-89e5-f2a102e042f9",
+      "seq": 2
+    }
+  ],
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": [
+    {
+      "order": "5481d38d-6fc5-4a97-b97e-d6f2fd69b6d0",
+      "seq": 1
+    },
+    {
+      "order": "7f9a7bda-1686-4ed8-91b3-545abd4e1e72",
+      "seq": 1
+    },
+    {
+      "order": "84bb461c-b46d-4a64-a1af-d4e6b0534efc",
+      "seq": 1
+    },
+    {
+      "order": "aa156c0e-4353-4a17-a58a-220d49608f27",
+      "seq": 1
+    },
+    {
+      "order": "b52c9cd5-f1fc-4f41-a714-9699be9bd275",
+      "seq": 1
+    },
+    {
+      "order": "fdd52d79-547c-40ee-89e5-f2a102e042f9",
+      "seq": 2
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import (
 
 // Log markers the checker and runner search for.
 const (
+	Armed         = "POINTS_ARMED"
 	CrashPointHit = "CRASH_POINT_HIT"
 	StallPointHit = "STALL_POINT_HIT"
 	StallPointEnd = "STALL_POINT_END"

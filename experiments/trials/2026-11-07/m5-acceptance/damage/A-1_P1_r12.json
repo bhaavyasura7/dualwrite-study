@@ -1,0 +1,30 @@
+{
+  "lost": [
+    {
+      "order": "29e52341-6e11-4dcf-960b-740c66c7be9e",
+      "seq": 1
+    },
+    {
+      "order": "4527734d-828a-474d-a113-a5191c80478c",
+      "seq": 2
+    },
+    {
+      "order": "93948f50-69f4-4b72-a245-dbbd3c97588b",
+      "seq": 2
+    }
+  ],
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": [
+    {
+      "order": "4527734d-828a-474d-a113-a5191c80478c",
+      "seq": 2
+    },
+    {
+      "order": "93948f50-69f4-4b72-a245-dbbd3c97588b",
+      "seq": 2
+    }
+  ]
+}

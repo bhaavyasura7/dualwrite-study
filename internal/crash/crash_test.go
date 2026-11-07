@@ -91,3 +91,19 @@ func TestStallFiresOnceOnNthHit(t *testing.T) {
 		t.Fatalf("slept = %v", slept)
 	}
 }
+
+func TestPointsWaitForArming(t *testing.T) {
+	kills := arm(t, "1")
+	waiting.Store(true)
+	t.Cleanup(func() { waiting.Store(false) })
+
+	Point("here")
+	if *kills != 0 || hits.Load() != 0 {
+		t.Fatalf("counted before arming: kills = %d, hits = %d", *kills, hits.Load())
+	}
+	waiting.Store(false)
+	Point("here")
+	if *kills != 1 {
+		t.Fatalf("kills = %d, want 1", *kills)
+	}
+}

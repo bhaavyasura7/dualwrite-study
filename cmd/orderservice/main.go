@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"dualwrite-study/internal/config"
+	"dualwrite-study/internal/crash"
 	"dualwrite-study/internal/events"
 	"dualwrite-study/internal/obs"
 	"dualwrite-study/internal/patterns"
@@ -37,6 +38,7 @@ func run() error {
 		return fmt.Errorf("config: %w", err)
 	}
 	obs.Setup("orderservice", cfg.Pattern, cfg.CycleID)
+	crash.Setup()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

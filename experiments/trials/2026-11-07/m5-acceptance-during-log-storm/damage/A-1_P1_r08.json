@@ -1,0 +1,42 @@
+{
+  "lost": [
+    {
+      "order": "04975ad3-a5d3-44e3-88be-96a3e90dbb33",
+      "seq": 2
+    },
+    {
+      "order": "7dd3d1fa-16f8-4336-920c-6bcd36aa3f4c",
+      "seq": 1
+    },
+    {
+      "order": "8746b551-2e89-4fbc-a0b7-33bc0e3c9d85",
+      "seq": 2
+    },
+    {
+      "order": "91e8d963-2937-4379-831c-8c1dd34ef322",
+      "seq": 1
+    },
+    {
+      "order": "9c6b29ec-4080-46c3-845f-7c012a0361c5",
+      "seq": 1
+    }
+  ],
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": [
+    {
+      "order": "04975ad3-a5d3-44e3-88be-96a3e90dbb33",
+      "seq": 2
+    },
+    {
+      "order": "91e8d963-2937-4379-831c-8c1dd34ef322",
+      "seq": 1
+    },
+    {
+      "order": "9c6b29ec-4080-46c3-845f-7c012a0361c5",
+      "seq": 1
+    }
+  ]
+}

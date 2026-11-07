@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 1.3 · November 2026"
+subtitle: "Go implementation · version 1.5 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -301,7 +301,9 @@ Requirements:
 
 - **No cleanup.** The process must die like `kill -9`: no deferred functions, no Kafka flush, no transaction rollback by our code.
 - **Containers must run with `init: true`** in Compose (tini as PID 1). The Linux kernel ignores SIGKILL sent from inside a PID namespace to its own PID 1, so without an init process the self-kill silently does nothing.
-- `CRASH_AFTER_N` (default 50): the hook fires on the Nth time the point is reached, so the system is in steady state when it dies.
+- `CRASH_AFTER_N` (default 50): the hook fires on the Nth time the point is reached **after arming**. With `ARM_ON_SIGNAL=true`, points stay inactive until the runner sends SIGUSR1 at the end of warm-up, so the system is in steady state when it dies. Without arming, 50 hits at about 178 changes/s fire 0.35 s into load, inside the warm-up.
+- **Randomised firing point.** For each cycle the runner draws N uniformly from `[after_n, 2 × after_n]` using the cycle seed and records it (`crash_after_n`). A fixed point can line up with batching or flush cycles.
+- **In-flight at crash.** The checker derives `inflight_at_crash` and `oldest_pending_ms` from the log markers, so collateral loss can be reported against what was in flight rather than as a mean with wide error bars.
 - The runner confirms the crash by finding `CRASH_POINT_HIT` in the container log; a cycle where it is missing is marked `INVALID_NO_CRASH`.
 - **Hooked vs collateral damage.** A crash point kills the whole process, so every other request in flight dies at a random point too. The marker therefore logs the event(s) at the hook, and the checker reports damage to those events (`hooked_*`) separately from damage to all others (`collateral_*`). Targeted asserts with `assert_scope: hooked` apply only to the former.
 - **Changing `CRASH_AT` means recreating the container.** Docker fixes a container's environment at creation, so `ContainerStart` would bring the service back with the crash point still armed. The runner always recreates (remove + create) components whose environment changes, including after every crash.
@@ -467,6 +469,7 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 | business_damage_<strategy> | absolute difference between rows in that strategy's payment table and orders whose final status is PAID |
 | hooked_lost / hooked_dup | damage to the event(s) named in `CRASH_POINT_HIT` |
 | collateral_lost / collateral_dup | the same metrics for every other event |
+| inflight_at_crash / oldest_pending_ms | records with `SENT_CALLED` but no outcome at `CRASH_POINT_HIT`, and the age of the oldest |
 | wal_retained_bytes_max | maximum `pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)` of the cycle's slot, sampled every second (P4/P5) |
 
 **Version history:** DB is built from `orders_history` (Section 5.1), which a trigger fills on every insert/update of `orders`. The trigger runs in all patterns, so its overhead is equal across them.
@@ -555,7 +558,7 @@ Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one b
 
 **Sharding.** `--shard i/n` runs only the vectors whose `hash(vector_id) mod n = i-1`, so n laptops split the catalogue with no overlap and every cycle of a vector runs on one machine, and each writes `results/results.<host>.csv`. All laptops must use the same git commit and image digests (checked at start and recorded in every row). Performance vectors (`group: perf`) are never sharded: they run on one designated machine.
 
-**Run-time budget.** At an assumed ~75 s of fixed overhead per cycle (reset, start, drain, check), the catalogue needs about 1,800 cycles / ~80 h for `must`, ~1,300 / ~50 h for `should`, and ~400 / ~20 h for `optional`. Measure the real overhead on 2–3 vectors in Milestone 5 and re-plan before committing to the full run, including whether C0-1 needs its full five hours. Correctness runs can be split across team laptops with identical pinned stacks; performance runs (P-1) stay on one machine.
+**Run-time budget.** Measured in Milestone 5 on P1 across A-1, A-2 and A-8: about 12 s of fixed overhead per cycle (reset, start, drain, check), of which 10 s is the drain's quiet period. At that figure the catalogue needs 1,790 cycles / ~41 h for `must`, 1,390 / ~28 h for `should`, and 420 / ~7 h for `optional`, about 77 h in total. P4 and P5 add connector creation and failover vectors add a rebuild, so measure those in Milestones 6 and 7. Measure the real overhead on 2–3 vectors in Milestone 5 and re-plan before committing to the full run, including whether C0-1 needs its full five hours. Correctness runs can be split across team laptops with identical pinned stacks; performance runs (P-1) stay on one machine.
 
 ## 14.3 Results CSV (one row per cycle)
 
@@ -565,9 +568,10 @@ status, sweep_json, versions_json, load_rate, orders_total, events_total,
 lost, ghost, duplicates, out_of_order, stale_redelivery, lost_after_send,
 hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
-wal_retained_bytes_max, send_failed, host, shard, git_commit,
+wal_retained_bytes_max, send_failed, crash_after_n, inflight_at_crash, oldest_pending_ms,
+host, shard, git_commit,
 window_p50_ms, window_p99_ms, window_max_ms, recovery_s,
-throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, started_at, finished_at
+throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s, started_at, finished_at
 ```
 
 Every row carries the random seed and the pinned versions so any cycle can be replayed.
@@ -641,7 +645,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 1.3
+# 20. Changes in versions 1.1 to 1.5
 
 | # | Area | Change |
 |---|---|---|
@@ -673,3 +677,6 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 26 | 11.2, 14.3 | (1.3) `out_of_order` counts first deliveries only; new metric and CSV column `stale_redelivery` |
 | 27 | 14.2 | (1.3) Sharding by vector, not by cycle |
 | 28 | 14.2 | (1.3) Re-plan from measured overhead on 2–3 vectors before the full run |
+| 29 | 7 | (1.4) Crash and stall points armed by SIGUSR1 after warm-up; randomised firing point `crash_after_n` |
+| 30 | 7, 11.2, 14.3 | (1.4) `inflight_at_crash`, `oldest_pending_ms`, `load_s` columns |
+| 31 | 14.2 | (1.5) Run-time budget updated with the overhead measured in Milestone 5 |

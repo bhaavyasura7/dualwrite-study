@@ -32,13 +32,15 @@ type Record struct {
 
 // Input is everything one cycle produced.
 type Input struct {
-	DB         []Version      `json:"db"`
-	Kafka      []Record       `json:"kafka"`
-	Sent       []Pair         `json:"sent"`        // SENT_CALLED markers
-	Hooked     []Pair         `json:"hooked"`      // events named by CRASH_POINT_HIT
-	SendFailed int            `json:"send_failed"` // SEND_FAILED markers
-	Payments   map[string]int `json:"payments"`    // rows per consumer strategy; nil outside group G
-	PaidOrders int            `json:"paid_orders"` // orders whose final status is PAID
+	DB              []Version      `json:"db"`
+	Kafka           []Record       `json:"kafka"`
+	Sent            []Pair         `json:"sent"`        // SENT_CALLED markers
+	Hooked          []Pair         `json:"hooked"`      // events named by CRASH_POINT_HIT
+	SendFailed      int            `json:"send_failed"` // SEND_FAILED markers
+	InflightAtCrash int            `json:"inflight_at_crash"`
+	OldestPendingMS float64        `json:"oldest_pending_ms"`
+	Payments        map[string]int `json:"payments"`    // rows per consumer strategy; nil outside group G
+	PaidOrders      int            `json:"paid_orders"` // orders whose final status is PAID
 }
 
 // Result holds the metrics of Section 11.2. Names match the results CSV.
@@ -50,14 +52,17 @@ type Result struct {
 	Duplicates  int `json:"duplicates"`
 	OutOfOrder  int `json:"out_of_order"`
 	// StaleRedelivery is a subset of Duplicates, not additive with it.
-	StaleRedelivery int            `json:"stale_redelivery"`
-	LostAfterSend   int            `json:"lost_after_send"`
-	HookedLost      int            `json:"hooked_lost"`
-	HookedDup       int            `json:"hooked_dup"`
-	HookedGhost     int            `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
-	CollateralLost  int            `json:"collateral_lost"`
-	CollateralDup   int            `json:"collateral_dup"`
-	SendFailed      int            `json:"send_failed"`
+	StaleRedelivery int `json:"stale_redelivery"`
+	LostAfterSend   int `json:"lost_after_send"`
+	HookedLost      int `json:"hooked_lost"`
+	HookedDup       int `json:"hooked_dup"`
+	HookedGhost     int `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
+	CollateralLost  int `json:"collateral_lost"`
+	CollateralDup   int `json:"collateral_dup"`
+	SendFailed      int `json:"send_failed"`
+	// In-flight state at the crash, so collateral loss can be reported against it.
+	InflightAtCrash int            `json:"inflight_at_crash"`
+	OldestPendingMS float64        `json:"oldest_pending_ms"`
 	BusinessDamage  map[string]int `json:"business_damage,omitempty"`
 	WindowP50MS     float64        `json:"window_p50_ms"`
 	WindowP99MS     float64        `json:"window_p99_ms"`
@@ -77,7 +82,12 @@ type Damage struct {
 // Check computes the cycle's metrics. Input order does not matter.
 func Check(in Input) (Result, Damage) {
 	var damage Damage
-	result := Result{EventsTotal: len(in.DB), SendFailed: in.SendFailed}
+	result := Result{
+		EventsTotal:     len(in.DB),
+		SendFailed:      in.SendFailed,
+		InflightAtCrash: in.InflightAtCrash,
+		OldestPendingMS: in.OldestPendingMS,
+	}
 
 	committed := make(map[Pair]time.Time, len(in.DB))
 	orders := make(map[string]struct{})

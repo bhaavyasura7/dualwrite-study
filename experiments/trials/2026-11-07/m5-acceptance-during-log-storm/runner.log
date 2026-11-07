@@ -1,0 +1,45 @@
+time=2026-11-07T07:27:37.200+05:30 level=INFO msg="run started" cycles=30 commit=0cc1c0b2efb5-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m5.csv
+time=2026-11-07T07:28:22.464+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r01 n=1 of=30 status=OK lost=1 hooked_lost=1 inflight=1 cycle_s=45.223442375 load_s=31.8505005
+time=2026-11-07T07:29:11.941+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r02 n=2 of=30 status=OK lost=14 hooked_lost=1 inflight=6 cycle_s=49.454753875 load_s=35.842250083
+time=2026-11-07T07:29:57.743+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r03 n=3 of=30 status=OK lost=2 hooked_lost=1 inflight=0 cycle_s=45.325883416 load_s=31.786547291
+time=2026-11-07T07:30:41.850+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r04 n=4 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=44.079404625 load_s=31.984446708
+time=2026-11-07T07:31:26.872+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r05 n=5 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=44.990114750000004 load_s=32.048686875
+time=2026-11-07T07:32:12.482+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r06 n=6 of=30 status=OK lost=2 hooked_lost=1 inflight=0 cycle_s=45.582251375 load_s=33.279305458
+time=2026-11-07T07:32:58.822+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r07 n=7 of=30 status=OK lost=10 hooked_lost=1 inflight=6 cycle_s=46.304410541 load_s=32.38684925
+time=2026-11-07T07:33:44.335+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r08 n=8 of=30 status=OK lost=5 hooked_lost=1 inflight=3 cycle_s=45.47971975 load_s=33.175449292
+time=2026-11-07T07:34:27.834+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r09 n=9 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=43.466097 load_s=31.995838208
+time=2026-11-07T07:35:11.135+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r10 n=10 of=30 status=OK lost=2 hooked_lost=1 inflight=0 cycle_s=43.277984583 load_s=32.222314959
+time=2026-11-07T07:35:54.637+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r11 n=11 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=43.475139959 load_s=31.850483375
+time=2026-11-07T07:36:38.485+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r12 n=12 of=30 status=OK lost=3 hooked_lost=1 inflight=0 cycle_s=43.820236125 load_s=31.807904375
+time=2026-11-07T07:37:23.139+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r13 n=13 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=44.626361667 load_s=31.74670475
+time=2026-11-07T07:38:07.742+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r14 n=14 of=30 status=OK lost=18 hooked_lost=1 inflight=12 cycle_s=44.573943333 load_s=32.9587855
+time=2026-11-07T07:38:52.014+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r15 n=15 of=30 status=OK lost=4 hooked_lost=1 inflight=2 cycle_s=44.239021 load_s=31.787534292
+time=2026-11-07T07:39:35.894+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r16 n=16 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=43.855085083 load_s=31.784724708
+time=2026-11-07T07:40:18.913+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r17 n=17 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=42.994643791 load_s=31.762803041
+time=2026-11-07T07:41:01.792+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r18 n=18 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=42.855767625 load_s=31.509367333
+time=2026-11-07T07:41:44.798+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r19 n=19 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=42.978000083 load_s=31.359462708
+time=2026-11-07T07:42:28.537+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r20 n=20 of=30 status=OK lost=1 hooked_lost=1 inflight=1 cycle_s=43.707476208 load_s=32.223148375
+time=2026-11-07T07:43:11.976+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r21 n=21 of=30 status=OK lost=9 hooked_lost=1 inflight=8 cycle_s=43.40986925 load_s=32.305075833
+time=2026-11-07T07:43:55.638+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r22 n=22 of=30 status=OK lost=2 hooked_lost=1 inflight=2 cycle_s=43.63333875 load_s=31.864462083
+time=2026-11-07T07:44:39.089+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r23 n=23 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=43.422577417 load_s=32.052290709
+time=2026-11-07T07:45:22.831+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r24 n=24 of=30 status=OK lost=3 hooked_lost=1 inflight=0 cycle_s=43.713807541 load_s=32.000093833
+time=2026-11-07T07:46:06.781+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r25 n=25 of=30 status=OK lost=2 hooked_lost=1 inflight=1 cycle_s=43.926598542 load_s=33.025869291
+time=2026-11-07T07:46:49.673+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r26 n=26 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=42.868267583 load_s=31.76088625
+time=2026-11-07T07:47:32.648+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r27 n=27 of=30 status=OK lost=3 hooked_lost=1 inflight=2 cycle_s=42.9497245 load_s=31.496654792
+time=2026-11-07T07:48:15.147+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r28 n=28 of=30 status=OK lost=3 hooked_lost=1 inflight=2 cycle_s=42.478053167 load_s=31.400086875
+time=2026-11-07T07:48:57.598+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r29 n=29 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=42.433286583 load_s=31.423442792
+time=2026-11-07T07:49:40.126+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r30 n=30 of=30 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=42.507374791 load_s=31.440145334
+time=2026-11-07T07:49:42.941+05:30 level=INFO msg="run started" cycles=9 commit=0cc1c0b2efb5-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m5.csv
+time=2026-11-07T07:50:25.942+05:30 level=INFO msg="cycle finished" cycle=A-2_P1_r01 n=1 of=9 status=OK lost=2 hooked_lost=0 inflight=2 cycle_s=42.975760458 load_s=31.777264292
+time=2026-11-07T07:51:08.481+05:30 level=INFO msg="cycle finished" cycle=A-2_P1_r02 n=2 of=9 status=OK lost=1 hooked_lost=0 inflight=1 cycle_s=42.51620525 load_s=31.40627725
+time=2026-11-07T07:51:51.129+05:30 level=INFO msg="cycle finished" cycle=A-2_P1_r03 n=3 of=9 status=OK lost=1 hooked_lost=0 inflight=1 cycle_s=42.626825333 load_s=31.420465375
+time=2026-11-07T07:52:34.037+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c1_r01 n=4 of=9 status=OK lost=3 hooked_lost=1 inflight=3 cycle_s=42.874015541 load_s=31.719418208
+time=2026-11-07T07:53:29.035+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c1_r02 n=5 of=9 status=OK lost=2 hooked_lost=1 inflight=2 cycle_s=50.428021959 load_s=31.350653292
+time=2026-11-07T07:53:29.683+05:30 level=ERROR msg="cycle failed" cycle=A-8_P1_c1_r03 status=FAILED_RESET error="create topic orders.A-8_P1_c1_r03: INVALID_REPLICATION_FACTOR: Replication factor is below 1 or larger than the number of available brokers."
+time=2026-11-07T07:53:29.707+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c1_r03 n=6 of=9 status=FAILED_RESET lost=0 hooked_lost=0 inflight=0 cycle_s=0.625875542 load_s=0
+time=2026-11-07T07:53:29.773+05:30 level=ERROR msg="cycle failed" cycle=A-8_P1_c2_r01 status=FAILED_RESET error="create topic orders.A-8_P1_c2_r01: INVALID_REPLICATION_FACTOR: Replication factor is below 1 or larger than the number of available brokers."
+time=2026-11-07T07:53:29.805+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c2_r01 n=7 of=9 status=FAILED_RESET lost=0 hooked_lost=0 inflight=0 cycle_s=0.065827666 load_s=0
+time=2026-11-07T07:53:29.865+05:30 level=ERROR msg="cycle failed" cycle=A-8_P1_c2_r02 status=FAILED_RESET error="create topic orders.A-8_P1_c2_r02: INVALID_REPLICATION_FACTOR: Replication factor is below 1 or larger than the number of available brokers."
+time=2026-11-07T07:53:29.893+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c2_r02 n=8 of=9 status=FAILED_RESET lost=0 hooked_lost=0 inflight=0 cycle_s=0.060389833 load_s=0
+time=2026-11-07T07:53:29.957+05:30 level=ERROR msg="cycle failed" cycle=A-8_P1_c2_r03 status=FAILED_RESET error="create topic orders.A-8_P1_c2_r03: INVALID_REPLICATION_FACTOR: Replication factor is below 1 or larger than the number of available brokers."
+time=2026-11-07T07:53:29.970+05:30 level=INFO msg="cycle finished" cycle=A-8_P1_c2_r03 n=9 of=9 status=FAILED_RESET lost=0 hooked_lost=0 inflight=0 cycle_s=0.06420125 load_s=0

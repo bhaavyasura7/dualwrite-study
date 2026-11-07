@@ -156,22 +156,28 @@ func ReadKafka(ctx context.Context, brokers []string, topic string) ([]Record, e
 
 // Evidence is what the cycle's logs contribute to the check.
 type Evidence struct {
-	Sent       []Pair
-	Hooked     []Pair
-	SendFailed int
+	Sent            []Pair
+	Hooked          []Pair
+	SendFailed      int
+	InflightAtCrash int     // records sent but not yet resolved at the crash marker
+	OldestPendingMS float64 // age of the oldest of them
 }
 
-// ParseLogs extracts the markers from a component's JSON log. Lines that are
-// not JSON, such as a Go panic trace, are skipped.
+// ParseLogs extracts the markers from a component's JSON log, in log order. Lines
+// that are not JSON, such as a Go panic trace, are skipped.
 func ParseLogs(r io.Reader) (Evidence, error) {
 	var evidence Evidence
+	pending := make(map[string]time.Time)
+	crashed := false
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		var line struct {
-			Msg     string `json:"msg"`
-			OrderID string `json:"order_id"`
-			Seq     int    `json:"seq"`
+			Time    time.Time `json:"time"`
+			Msg     string    `json:"msg"`
+			EventID string    `json:"event_id"`
+			OrderID string    `json:"order_id"`
+			Seq     int       `json:"seq"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &line) != nil {
 			continue
@@ -180,14 +186,57 @@ func ParseLogs(r io.Reader) (Evidence, error) {
 		switch line.Msg {
 		case obs.SentCalled:
 			evidence.Sent = append(evidence.Sent, pair)
-		case obs.CrashPointHit:
-			evidence.Hooked = append(evidence.Hooked, pair)
+			pending[line.EventID] = line.Time
+		case obs.SendAcked:
+			delete(pending, line.EventID)
 		case obs.SendFailed:
 			evidence.SendFailed++
+			delete(pending, line.EventID)
+		case obs.CrashPointHit:
+			evidence.Hooked = append(evidence.Hooked, pair)
+			if !crashed {
+				crashed = true
+				evidence.InflightAtCrash = len(pending)
+				for _, sent := range pending {
+					age := float64(line.Time.Sub(sent)) / float64(time.Millisecond)
+					evidence.OldestPendingMS = max(evidence.OldestPendingMS, age)
+				}
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return Evidence{}, fmt.Errorf("read logs: %w", err)
 	}
 	return evidence, nil
+}
+
+// Collect gathers one cycle's input from Postgres, Kafka and its logs.
+func Collect(ctx context.Context, dsn string, brokers []string, topic string, logs io.Reader, strategies []string) (Input, error) {
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		return Input{}, fmt.Errorf("connect to postgres: %w", err)
+	}
+	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+
+	var in Input
+	if in.DB, in.PaidOrders, err = ReadDB(ctx, conn); err != nil {
+		return Input{}, err
+	}
+	if len(strategies) > 0 {
+		if in.Payments, err = ReadPayments(ctx, conn, strategies); err != nil {
+			return Input{}, err
+		}
+	}
+	if in.Kafka, err = ReadKafka(ctx, brokers, topic); err != nil {
+		return Input{}, err
+	}
+	if logs != nil {
+		evidence, err := ParseLogs(logs)
+		if err != nil {
+			return Input{}, err
+		}
+		in.Sent, in.Hooked, in.SendFailed = evidence.Sent, evidence.Hooked, evidence.SendFailed
+		in.InflightAtCrash, in.OldestPendingMS = evidence.InflightAtCrash, evidence.OldestPendingMS
+	}
+	return in, nil
 }

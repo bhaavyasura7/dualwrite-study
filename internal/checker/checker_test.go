@@ -132,6 +132,23 @@ func sorted(pairs []Pair) []Pair {
 	return out
 }
 
+func TestParseLogsInflightAtCrash(t *testing.T) {
+	logs := `{"time":"2026-11-20T10:00:00.000Z","msg":"SENT_CALLED","event_id":"a","order_id":"o1","seq":1}
+{"time":"2026-11-20T10:00:00.040Z","msg":"SENT_CALLED","event_id":"b","order_id":"o2","seq":1}
+{"time":"2026-11-20T10:00:00.050Z","msg":"SENT_CALLED","event_id":"c","order_id":"o3","seq":1}
+{"time":"2026-11-20T10:00:00.060Z","msg":"SEND_ACKED","event_id":"a"}
+{"time":"2026-11-20T10:00:00.100Z","msg":"CRASH_POINT_HIT","order_id":"o4","seq":1,"point":"after_db_commit"}
+{"time":"2026-11-20T10:00:09.000Z","msg":"SENT_CALLED","event_id":"z","order_id":"o5","seq":1}
+`
+	got, err := ParseLogs(strings.NewReader(logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.InflightAtCrash != 2 || got.OldestPendingMS != 60 {
+		t.Fatalf("inflight = %d, oldest = %v ms", got.InflightAtCrash, got.OldestPendingMS)
+	}
+}
+
 func TestParseLogs(t *testing.T) {
 	logs := `{"msg":"orderservice started"}
 {"msg":"SENT_CALLED","order_id":"a","seq":1}
