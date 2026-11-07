@@ -1,0 +1,24 @@
+{
+  "name": "p4-{{cycle_id}}-{{run_id}}",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "toxiproxy", "database.port": "15433",
+    "database.user": "app", "database.password": "app", "database.dbname": "shop",
+    "slot.name": "slot_{{cycle_slug}}",
+    "publication.name": "pub_outbox",
+    "publication.autocreate.mode": "disabled",
+    "snapshot.mode": "no_data",
+    "poll.interval.ms": "{{poll_ms}}",
+    "topic.prefix": "cdc{{cycle_slug}}",
+    "table.include.list": "public.outbox",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.route.topic.replacement": "orders.{{cycle_id}}",
+    "transforms.outbox.table.field.event.key": "aggregateid",
+    "transforms.outbox.table.fields.additional.placement": "seq:header",
+    "producer.override.acks": "{{acks}}"
+  }
+}

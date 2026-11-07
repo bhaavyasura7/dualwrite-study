@@ -48,9 +48,25 @@ type generator struct {
 	failed   int
 }
 
+// Session is a load run in progress.
+type Session struct {
+	g      *generator
+	report chan outcome
+}
+
+type outcome struct {
+	report Report
+	err    error
+}
+
 // Run drives the order service until the duration ends or ctx is cancelled, then
 // waits for outstanding requests.
 func Run(ctx context.Context, cfg config.LoadGen) (Report, error) {
+	return Start(ctx, cfg).Wait()
+}
+
+// Start begins a run in the background.
+func Start(ctx context.Context, cfg config.LoadGen) *Session {
 	g := &generator{
 		cfg: cfg,
 		client: &http.Client{
@@ -59,12 +75,33 @@ func Run(ctx context.Context, cfg config.LoadGen) (Report, error) {
 		},
 		start: time.Now(),
 	}
-	defer g.client.CloseIdleConnections()
-	orders := g.drive(ctx)
-	if err := g.writeSeries(); err != nil {
-		return Report{}, err
+	session := &Session{g: g, report: make(chan outcome, 1)}
+	go func() {
+		defer g.client.CloseIdleConnections()
+		orders := g.drive(ctx)
+		err := g.writeSeries()
+		session.report <- outcome{g.summary(orders, time.Since(g.start)), err}
+	}()
+	return session
+}
+
+// Wait returns the report once the run has ended.
+func (s *Session) Wait() (Report, error) {
+	result := <-s.report
+	return result.report, result.err
+}
+
+// RecentP99 is the p99 latency of requests started within the last window.
+func (s *Session) RecentP99(window time.Duration) float64 {
+	s.g.mu.Lock()
+	defer s.g.mu.Unlock()
+	since := float64(time.Since(s.g.start)-window) / float64(time.Millisecond)
+	var latencies []float64
+	for i := len(s.g.samples) - 1; i >= 0 && s.g.samples[i].startMS >= since; i-- {
+		latencies = append(latencies, s.g.samples[i].latencyMS)
 	}
-	return g.summary(orders, time.Since(g.start)), nil
+	slices.Sort(latencies)
+	return obs.Percentile(latencies, 99)
 }
 
 // drive issues orders on schedule and waits for their follow-ups. All random

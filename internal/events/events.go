@@ -60,12 +60,25 @@ func typeOf(status string) (string, error) {
 	return "", fmt.Errorf("unknown order status %q", status)
 }
 
-// Decode parses a Kafka record value. A value missing its identity is an error,
-// so a malformed record can never pass as damage-free.
+// Decode parses a Kafka record value: the common schema for P1–P4, or a Debezium
+// row-change envelope for P5, mapped from `after`. A value missing its identity
+// is an error, so a malformed record can never pass as damage-free.
 func Decode(value []byte) (Event, error) {
-	var ev Event
-	if err := json.Unmarshal(value, &ev); err != nil {
+	var envelope struct {
+		Event
+		After *struct {
+			OrderID uuid.UUID `json:"order_id"`
+			Version int       `json:"version"`
+			Status  string    `json:"status"`
+			Amount  float64   `json:"amount"`
+		} `json:"after"`
+	}
+	if err := json.Unmarshal(value, &envelope); err != nil {
 		return Event{}, fmt.Errorf("decode event: %w", err)
+	}
+	ev := envelope.Event
+	if after := envelope.After; after != nil {
+		ev = Event{OrderID: after.OrderID, Seq: after.Version, Status: after.Status, Amount: after.Amount, Pattern: "P5"}
 	}
 	if ev.OrderID == uuid.Nil || ev.Seq < 1 {
 		return Event{}, fmt.Errorf("decode event: missing order_id or seq in %q", value)

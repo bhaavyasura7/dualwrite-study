@@ -1,0 +1,17 @@
+time=2026-11-07T09:38:12.067+05:30 level=INFO msg="run started" cycles=2 commit=e8b326d52d43-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m6c-poll100.csv
+time=2026-11-07T09:39:43.320+05:30 level=ERROR msg="cycle failed" cycle=C0-1_P4_r01 status=FAILED_START error="slot never became active: context deadline exceeded"
+time=2026-11-07T09:39:43.327+05:30 level=INFO msg="cycle finished" cycle=C0-1_P4_r01 n=1 of=2 status=FAILED_START lost=0 hooked_lost=0 inflight=0 cycle_s=91.251859458 load_s=0
+time=2026-11-07T09:41:14.523+05:30 level=ERROR msg="cycle failed" cycle=C0-1_P5_r01 status=FAILED_START error="slot never became active: context deadline exceeded"
+time=2026-11-07T09:41:14.526+05:30 level=INFO msg="cycle finished" cycle=C0-1_P5_r01 n=2 of=2 status=FAILED_START lost=0 hooked_lost=0 inflight=0 cycle_s=91.195639125 load_s=0
+time=2026-11-07T09:41:16.395+05:30 level=INFO msg="run started" cycles=2 commit=e8b326d52d43-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m6c-poll500.csv
+time=2026-11-07T09:42:47.544+05:30 level=ERROR msg="cycle failed" cycle=C0-1_P4_r01 status=FAILED_START error="slot never became active: context deadline exceeded"
+time=2026-11-07T09:42:47.549+05:30 level=INFO msg="cycle finished" cycle=C0-1_P4_r01 n=1 of=2 status=FAILED_START lost=0 hooked_lost=0 inflight=0 cycle_s=91.148318167 load_s=0
+time=2026-11-07T09:44:18.729+05:30 level=ERROR msg="cycle failed" cycle=C0-1_P5_r01 status=FAILED_START error="slot never became active: context deadline exceeded"
+time=2026-11-07T09:44:18.736+05:30 level=INFO msg="cycle finished" cycle=C0-1_P5_r01 n=2 of=2 status=FAILED_START lost=0 hooked_lost=0 inflight=0 cycle_s=91.174933542 load_s=0
+time=2026-11-07T09:44:21.477+05:30 level=INFO msg="run started" cycles=4 commit=e8b326d52d43-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m6c-i1.csv
+time=2026-11-07T09:45:12.813+05:30 level=INFO msg="cycle finished" cycle=I-1_P3_c1_r01 n=1 of=4 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=51.329238167 load_s=40.473908875
+time=2026-11-07T09:46:04.621+05:30 level=INFO msg="cycle finished" cycle=I-1_P3_c2_r01 n=2 of=4 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=51.801466958 load_s=40.36658575
+time=2026-11-07T09:46:56.916+05:30 level=INFO msg="cycle finished" cycle=I-1_P3_c3_r01 n=3 of=4 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=52.291191167 load_s=40.427561542
+time=2026-11-07T09:47:48.750+05:30 level=INFO msg="cycle finished" cycle=I-1_P3_c4_r01 n=4 of=4 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=51.827121291 load_s=40.431997792
+time=2026-11-07T09:48:07.156+05:30 level=INFO msg="run started" cycles=1 commit=e8b326d52d43-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m6c-batch1.csv
+time=2026-11-07T09:49:10.287+05:30 level=INFO msg="cycle finished" cycle=C0-1_P3_r01 n=1 of=1 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=63.127054083 load_s=40.389649834

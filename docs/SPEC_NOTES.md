@@ -1,21 +1,20 @@
 # Spec notes
 
-`SPEC.md` (v1.1) and `experiments/vectors.yaml` are kept verbatim. This file records where the implementation differs from them, and why. The 12 issues raised against v1.0 are resolved in v1.1 (Section 20).
+`docs/SPEC.md` is the single master copy, changed only on instruction. This file records open questions about it.
 
-## Open issues in v1.5
+## Open issues
 
 | # | Section | Problem | What the code does | Status |
 |---|---|---|---|---|
 | 1 | 6.4, B-3 | Idempotent records in flight may not time out. Taken from the franz-go source, not yet seen under a real fault. | B-3 sweeps `KAFKA_IDEMPOTENT`. | Confirm at M7 |
 | 2 | 6.4 | `KAFKA_REQUEST_OVERHEAD_MS = 1000` should make hung connections visible within F-2 and F-3's 10 s fault. | Set in the publisher. | Confirm at M7 |
 | 5 | A-3, C-3 | P2's retries start from `SEND_FAILED`, which appeared only after Kafka returned. If so, A-3's crash point cannot fire during the outage, and C-3's crash finds no retry queue. | Needs a decision at M6. | Open |
-| 6 | C-1 | franz-go buffers 50,000 records by default. A 300 s outage at about 178 events/s needs 53,400, so `Produce` would block. | Set `MaxBufferedRecords` explicitly at M6. | M6 |
 
 Measured findings are in `docs/FINDINGS.md`.
 
 ## Not yet in the runner
 
-The `recovery_s` and `wal_retained_bytes_max` columns are empty until Milestones 6 and 7. The runner refuses, by name, any vector that needs a part not built yet.
+The `recovery_s` column is empty until Milestone 7. The runner refuses, by name, any vector that needs a part not built yet.
 
 ## To do at Milestone 7
 

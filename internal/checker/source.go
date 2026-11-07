@@ -161,6 +161,7 @@ type Evidence struct {
 	SendFailed      int
 	InflightAtCrash int     // records sent but not yet resolved at the crash marker
 	OldestPendingMS float64 // age of the oldest of them
+	BatchRows       []int   // rows per relay batch
 }
 
 // ParseLogs extracts the markers from a component's JSON log, in log order. Lines
@@ -173,11 +174,17 @@ func ParseLogs(r io.Reader) (Evidence, error) {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		var line struct {
-			Time    time.Time `json:"time"`
-			Msg     string    `json:"msg"`
-			EventID string    `json:"event_id"`
-			OrderID string    `json:"order_id"`
-			Seq     int       `json:"seq"`
+			Time    time.Time  `json:"time"`
+			Msg     string     `json:"msg"`
+			EventID string     `json:"event_id"`
+			OrderID string     `json:"order_id"`
+			Seq     int        `json:"seq"`
+			Phase   string     `json:"phase"`
+			N       int        `json:"n"`
+			Hooked  []struct { // a whole relay batch
+				OrderID string `json:"order_id"`
+				Seq     int    `json:"seq"`
+			} `json:"hooked"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &line) != nil {
 			continue
@@ -189,11 +196,20 @@ func ParseLogs(r io.Reader) (Evidence, error) {
 			pending[line.EventID] = line.Time
 		case obs.SendAcked:
 			delete(pending, line.EventID)
+		case obs.RelayBatch:
+			if line.Phase == "read" {
+				evidence.BatchRows = append(evidence.BatchRows, line.N)
+			}
 		case obs.SendFailed:
 			evidence.SendFailed++
 			delete(pending, line.EventID)
 		case obs.CrashPointHit:
-			evidence.Hooked = append(evidence.Hooked, pair)
+			if line.OrderID != "" {
+				evidence.Hooked = append(evidence.Hooked, pair)
+			}
+			for _, h := range line.Hooked {
+				evidence.Hooked = append(evidence.Hooked, Pair{OrderID: h.OrderID, Seq: h.Seq})
+			}
 			if !crashed {
 				crashed = true
 				evidence.InflightAtCrash = len(pending)
@@ -237,6 +253,7 @@ func Collect(ctx context.Context, dsn string, brokers []string, topic string, lo
 		}
 		in.Sent, in.Hooked, in.SendFailed = evidence.Sent, evidence.Hooked, evidence.SendFailed
 		in.InflightAtCrash, in.OldestPendingMS = evidence.InflightAtCrash, evidence.OldestPendingMS
+		in.BatchRows = evidence.BatchRows
 	}
 	return in, nil
 }

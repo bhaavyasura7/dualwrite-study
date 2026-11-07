@@ -82,6 +82,11 @@ func run() error {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
+	if drainer, ok := pattern.(interface{ Drain(context.Context) error }); ok {
+		if err := drainer.Drain(shutdownCtx); err != nil {
+			return err
+		}
+	}
 	if err := pub.Flush(shutdownCtx); err != nil {
 		return err
 	}

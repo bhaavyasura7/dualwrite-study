@@ -13,6 +13,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,7 +34,10 @@ import (
 
 const (
 	orderService = "dualwrite-run-orderservice"
+	relayName    = "dualwrite-run-relay-"
 	serviceImage = "dualwrite/orderservice:dev"
+	relayImage   = "dualwrite/relay:dev"
+	maxRelays    = 4
 	servicePort  = "8080"
 	primary      = "dualwrite-postgres-primary-1"
 	goMemory     = 256 << 20
@@ -77,7 +81,10 @@ type Runner struct {
 
 // New creates a runner.
 func New(opts Options, docker *Docker, results *Results) (*Runner, error) {
-	measurement := config.LoadMeasurement()
+	measurement, err := config.LoadMeasurement()
+	if err != nil {
+		return nil, fmt.Errorf("measurement config: %w", err)
+	}
 	baseLoad, err := config.LoadLoadGen()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
@@ -104,14 +111,14 @@ func (r *Runner) Close() { r.admin.Close() }
 // front stops a vector from running with parts of it silently missing.
 func Supported(c Cycle) error {
 	switch {
-	case c.Pattern != "P1":
-		return fmt.Errorf("pattern %s is not built yet", c.Pattern)
 	case len(c.Faults) > 0:
 		return errors.New("fault injection is not built yet")
 	case c.Stall != nil:
-		return errors.New("stall points need the relay")
-	case c.Crash != nil && c.Crash.Component != "orderservice":
+		return errors.New("stall cycles are not built yet")
+	case c.Crash != nil && c.Crash.Component != "orderservice" && c.Crash.Component != "relay":
 		return fmt.Errorf("crash component %s is not built yet", c.Crash.Component)
+	case c.Crash != nil && c.Crash.Component == "relay" && c.Topology.Relays != 1:
+		return errors.New("crash points on several relays are not built yet")
 	case len(c.Topology.Consumers) > 0:
 		return errors.New("consumers are not built yet")
 	case c.Crash == nil && c.Load.DurationS == 0:
@@ -172,10 +179,12 @@ func (r *Runner) Run(ctx context.Context, cycles []Cycle) error {
 
 // cycleRun holds one cycle's working state.
 type cycleRun struct {
-	cycle Cycle
-	row   *Row
-	logs  bytes.Buffer
-	env   map[string]string
+	cycle      Cycle
+	row        *Row
+	logs       bytes.Buffer
+	env        map[string]string
+	crashEnv   map[string]string // applied only to the crash component
+	components []Spec
 }
 
 // failure carries the status a cycle ended with.
@@ -191,9 +200,10 @@ func failed(state string, err error) error { return &failure{"FAILED_" + state, 
 func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 	seed := cycleSeed(r.opts.Seed, cycle.ID)
 	sweep, _ := json.Marshal(cycle.Sweep)
+	env, _ := json.Marshal(cycle.Env)
 	row := Row{
 		RunID: r.opts.RunID, CycleID: cycle.ID, VectorID: cycle.VectorID, Pattern: cycle.Pattern, Mode: cycle.Mode,
-		Repeat: cycle.Repeat, Seed: seed, SweepJSON: string(sweep), VersionsJSON: r.opts.Versions,
+		Repeat: cycle.Repeat, Seed: seed, SweepJSON: string(sweep), EnvJSON: string(env), VersionsJSON: r.opts.Versions,
 		LoadRate: cycle.Load.RatePerS, Host: r.opts.Host, Shard: r.opts.Shard.String(), GitCommit: r.opts.GitCommit,
 		StartedAt: time.Now(),
 	}
@@ -219,9 +229,10 @@ func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage *checker.Damage) error {
 	cycle := run.cycle
 	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		_ = r.docker.Remove(cleanup, orderService)
+		_ = r.removeComponents(cleanup)
+		_ = r.removeConnectors(cleanup)
 	}()
 
 	// RESET
@@ -230,43 +241,28 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	}
 
 	// START
-	run.env = maps.Clone(cycle.Env)
-	run.env["CYCLE_ID"] = cycle.ID
-	run.env["PATTERN"] = cycle.Pattern
-	if cycle.Crash != nil {
-		afterN := cycle.Crash.AfterN
-		if afterN == 0 {
-			var err error
-			if afterN, err = strconv.Atoi(cycle.Env["CRASH_AFTER_N"]); err != nil {
-				return failed("START", fmt.Errorf("CRASH_AFTER_N: %w", err))
-			}
-		}
-		rng := rand.New(rand.NewPCG(seed, seed+1))
-		run.row.CrashAfterN = afterN + rng.IntN(afterN+1)
-		run.row.CrashPoint = cycle.Crash.Point
-		run.row.Fault = "crash_point"
-		run.env["CRASH_AT"] = cycle.Crash.Point
-		run.env["CRASH_AFTER_N"] = strconv.Itoa(run.row.CrashAfterN)
-		run.env["ARM_ON_SIGNAL"] = "true"
-	}
-	if err := r.startService(ctx, run.env); err != nil {
+	if err := r.prepare(run, seed); err != nil {
 		return failed("START", err)
 	}
+	if err := r.startAll(ctx, run); err != nil {
+		return failed("START", err)
+	}
+	stopSampling := r.sampleState(ctx, cycle)
+	defer func() { run.row.WALRetainedMax, run.row.OutboxBacklogMax = stopSampling() }()
 
 	// WARMUP
 	loadCtx, stopLoad := context.WithCancel(ctx)
 	defer stopLoad()
-	reports := make(chan loadOutcome, 1)
 	loadConfig := r.baseLoad
 	loadConfig.Mode, loadConfig.Rate, loadConfig.Seed = cycle.Load.Mode, cycle.Load.RatePerS, seed
 	loadConfig.Duration = 0
 	loadConfig.Warmup = time.Duration(cycle.Load.WarmupS) * time.Second
 	cpuBefore, cpuErr := r.docker.CPU(ctx, primary)
-	go func() {
-		report, err := load.Run(loadCtx, loadConfig)
-		reports <- loadOutcome{report, err}
-	}()
-	if err := sleep(ctx, loadConfig.Warmup); err != nil {
+	session := load.Start(loadCtx, loadConfig)
+	if err := sleep(ctx, max(loadConfig.Warmup-precheckWindow, 0)); err != nil {
+		return failed("WARMUP", err)
+	}
+	if err := r.precheck(ctx, run, session); err != nil {
 		return failed("WARMUP", err)
 	}
 
@@ -274,7 +270,7 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	if cycle.Crash != nil {
 		if err := r.crashAndRecover(ctx, run); err != nil {
 			stopLoad()
-			<-reports
+			_, _ = session.Wait()
 			return err
 		}
 		if err := sleep(ctx, time.Duration(cycle.Load.PostFaultS)*time.Second); err != nil {
@@ -286,12 +282,12 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 
 	// DRAIN
 	stopLoad()
-	outcome := <-reports
-	if outcome.err != nil {
-		return failed("DRAIN", outcome.err)
+	report, err := session.Wait()
+	if err != nil {
+		return failed("DRAIN", err)
 	}
-	run.row.ThroughputOps, run.row.LoadS = outcome.report.ThroughputOps, outcome.report.DurationS
-	run.row.LatencyP50MS, run.row.LatencyP99MS = outcome.report.LatencyP50MS, outcome.report.LatencyP99MS
+	run.row.ThroughputOps, run.row.LoadS = report.ThroughputOps, report.DurationS
+	run.row.LatencyP50MS, run.row.LatencyP99MS = report.LatencyP50MS, report.LatencyP99MS
 	if cpuErr == nil {
 		if cpuAfter, err := r.docker.CPU(ctx, primary); err == nil {
 			run.row.DBCPUPct = cpuPercent(cpuBefore, cpuAfter)
@@ -300,13 +296,16 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	if err := r.drain(ctx, cycle); err != nil {
 		return failed("DRAIN", err)
 	}
-	stop, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	if err := r.docker.Stop(stop, orderService); err != nil {
-		return failed("DRAIN", err)
-	}
-	if err := r.captureLogs(ctx, run); err != nil {
-		return failed("DRAIN", err)
+	for _, component := range run.components {
+		stop, cancel := context.WithTimeout(ctx, 15*time.Second)
+		err := r.docker.Stop(stop, component.Name)
+		cancel()
+		if err != nil {
+			return failed("DRAIN", err)
+		}
+		if err := r.captureLogs(ctx, run, component.Name); err != nil {
+			return failed("DRAIN", err)
+		}
 	}
 
 	// CHECK
@@ -324,45 +323,161 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	return nil
 }
 
-type loadOutcome struct {
-	report load.Report
-	err    error
+// prepare works out the cycle's components and environment.
+func (r *Runner) prepare(run *cycleRun, seed uint64) error {
+	cycle := run.cycle
+	run.env = maps.Clone(cycle.Env)
+	run.env["CYCLE_ID"] = cycle.ID
+	run.env["PATTERN"] = cycle.Pattern
+	run.components = []Spec{{Name: orderService, Image: serviceImage, Port: servicePort, MemoryBytes: goMemory}}
+	if cycle.Pattern == "P3" {
+		for i := 1; i <= cycle.Topology.Relays; i++ {
+			run.components = append(run.components, Spec{Name: relayName + strconv.Itoa(i), Image: relayImage, MemoryBytes: goMemory})
+		}
+	}
+	if cycle.Crash == nil {
+		return nil
+	}
+	afterN := cycle.Crash.AfterN
+	if afterN == 0 {
+		var err error
+		if afterN, err = strconv.Atoi(cycle.Env["CRASH_AFTER_N"]); err != nil {
+			return fmt.Errorf("CRASH_AFTER_N: %w", err)
+		}
+	}
+	rng := rand.New(rand.NewPCG(seed, seed+1))
+	run.row.CrashAfterN = afterN + rng.IntN(afterN+1)
+	run.row.CrashPoint = cycle.Crash.Point
+	run.row.Fault = "crash_point"
+	run.crashEnv = map[string]string{
+		"CRASH_AT":      cycle.Crash.Point,
+		"CRASH_AFTER_N": strconv.Itoa(run.row.CrashAfterN),
+		"ARM_ON_SIGNAL": "true",
+	}
+	return nil
+}
+
+// crashTarget names the container a crash point runs in.
+func crashTarget(c Cycle) string {
+	if c.Crash != nil && c.Crash.Component == "relay" {
+		return relayName + "1"
+	}
+	return orderService
+}
+
+// startAll creates the connector first, so its slot exists before any change.
+func (r *Runner) startAll(ctx context.Context, run *cycleRun) error {
+	ctx, cancel := context.WithTimeout(ctx, startTimeout)
+	defer cancel()
+	if isCDC(run.cycle.Pattern) {
+		if err := r.createConnector(ctx, run.cycle); err != nil {
+			return err
+		}
+	}
+	for _, component := range run.components {
+		env := maps.Clone(run.env)
+		if component.Name == crashTarget(run.cycle) {
+			maps.Copy(env, run.crashEnv)
+		}
+		if err := r.startComponent(ctx, component, env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Runner) startComponent(ctx context.Context, component Spec, env map[string]string) error {
+	component.Env = env
+	if err := r.docker.Recreate(ctx, component); err != nil {
+		return err
+	}
+	if component.Port == "" {
+		return nil
+	}
+	return r.waitHealthy(ctx)
+}
+
+const precheckWindow = 5 * time.Second
+
+// precheck samples the machine and the system for the last 5 s before any fault,
+// so a spike can later be traced to one or the other. It flags, never stops.
+func (r *Runner) precheck(ctx context.Context, run *cycleRun, session *load.Session) error {
+	before, cpuErr := r.docker.CPU(ctx, primary)
+	if err := sleep(ctx, precheckWindow); err != nil {
+		return err
+	}
+	if cpuErr == nil {
+		if after, err := r.docker.CPU(ctx, primary); err == nil {
+			run.row.PreDBCPUPct = cpuPercent(before, after)
+		}
+	}
+	run.row.PreP99MS = session.RecentP99(precheckWindow)
+	run.row.PreHostLoad = hostLoad()
+	var flags []string
+	if run.row.PreP99MS > r.measurement.PrecheckMaxP99MS {
+		flags = append(flags, "latency")
+	}
+	if run.row.PreHostLoad > r.measurement.PrecheckMaxHostLoad {
+		flags = append(flags, "load")
+	}
+	run.row.PreFlag = strings.Join(flags, "+")
+	return nil
+}
+
+// hostLoad is the Mac's one-minute load average, or 0 if unavailable.
+func hostLoad() float64 {
+	out, err := exec.Command("sysctl", "-n", "vm.loadavg").Output()
+	if err != nil {
+		return 0
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) < 2 {
+		return 0
+	}
+	load, err := strconv.ParseFloat(fields[1], 64)
+	if err != nil {
+		return 0
+	}
+	return load
 }
 
 // crashAndRecover arms the crash point now that warm-up is over, confirms the
-// crash, and recreates the service with the point cleared (recovery rule).
+// crash, and recreates the component with the point cleared (recovery rule).
 func (r *Runner) crashAndRecover(ctx context.Context, run *cycleRun) error {
+	target := crashTarget(run.cycle)
 	faultCtx, cancel := context.WithTimeout(ctx, faultTimeout)
 	defer cancel()
-	if err := r.docker.Signal(faultCtx, orderService, "SIGUSR1"); err != nil {
+	if err := r.docker.Signal(faultCtx, target, "SIGUSR1"); err != nil {
 		return failed("FAULT", err)
 	}
-	if err := r.docker.WaitForLog(faultCtx, orderService, obs.CrashPointHit); err != nil {
-		_ = r.captureLogs(ctx, run)
+	if err := r.docker.WaitForLog(faultCtx, target, obs.CrashPointHit); err != nil {
+		_ = r.captureLogs(ctx, run, target)
 		return &failure{"INVALID_NO_CRASH", err}
 	}
 	recoverCtx, cancelRecover := context.WithTimeout(ctx, recoverTimeout)
 	defer cancelRecover()
-	code, err := r.docker.WaitForExit(recoverCtx, orderService)
+	code, err := r.docker.WaitForExit(recoverCtx, target)
 	if err != nil {
 		return failed("RECOVER", err)
 	}
 	if code != 137 {
 		return failed("RECOVER", fmt.Errorf("exit code %d, want 137 (SIGKILL)", code))
 	}
-	if err := r.captureLogs(recoverCtx, run); err != nil {
+	if err := r.captureLogs(recoverCtx, run, target); err != nil {
 		return failed("RECOVER", err)
 	}
-	delete(run.env, "CRASH_AT")
-	delete(run.env, "ARM_ON_SIGNAL")
-	if err := r.startService(recoverCtx, run.env); err != nil {
-		return failed("RECOVER", err)
+	for _, component := range run.components {
+		if component.Name == target {
+			if err := r.startComponent(recoverCtx, component, run.env); err != nil {
+				return failed("RECOVER", err)
+			}
+		}
 	}
 	return nil
 }
 
-func (r *Runner) captureLogs(ctx context.Context, run *cycleRun) error {
-	logs, err := r.docker.Logs(ctx, orderService)
+func (r *Runner) captureLogs(ctx context.Context, run *cycleRun, name string) error {
+	logs, err := r.docker.Logs(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -370,11 +485,27 @@ func (r *Runner) captureLogs(ctx context.Context, run *cycleRun) error {
 	return nil
 }
 
-// reset follows the order in SPEC 14.2. Connector steps arrive with P4 and P5.
+func (r *Runner) removeComponents(ctx context.Context) error {
+	names := []string{orderService}
+	for i := 1; i <= maxRelays; i++ {
+		names = append(names, relayName+strconv.Itoa(i))
+	}
+	for _, name := range names {
+		if err := r.docker.Remove(ctx, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reset follows the order in SPEC 14.2.
 func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
 	ctx, cancel := context.WithTimeout(ctx, resetTimeout)
 	defer cancel()
-	if err := r.docker.Remove(ctx, orderService); err != nil {
+	if err := r.removeComponents(ctx); err != nil {
+		return err
+	}
+	if err := r.removeConnectors(ctx); err != nil {
 		return err
 	}
 	conn, err := pgx.Connect(ctx, r.measurement.PostgresDSN)
@@ -438,13 +569,7 @@ func (r *Runner) createTopic(ctx context.Context, cycle Cycle) error {
 	}
 }
 
-func (r *Runner) startService(ctx context.Context, env map[string]string) error {
-	ctx, cancel := context.WithTimeout(ctx, startTimeout)
-	defer cancel()
-	spec := Spec{Name: orderService, Image: serviceImage, Env: env, Port: servicePort, MemoryBytes: goMemory}
-	if err := r.docker.Recreate(ctx, spec); err != nil {
-		return err
-	}
+func (r *Runner) waitHealthy(ctx context.Context) error {
 	for {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, r.baseLoad.Target+"/healthz", nil)
 		if err != nil {
@@ -462,24 +587,39 @@ func (r *Runner) startService(ctx context.Context, env map[string]string) error 
 	}
 }
 
-// drain waits until the topic's end offsets stop moving for quiet_s.
+// drain waits until the topic's end offsets and the unsent outbox count stop
+// moving for quiet_s.
 func (r *Runner) drain(ctx context.Context, cycle Cycle) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cycle.Drain.TimeoutS)*time.Second)
 	defer cancel()
+	conn, err := pgx.Connect(ctx, r.measurement.PostgresDSN)
+	if err != nil {
+		return fmt.Errorf("connect to postgres: %w", err)
+	}
+	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+
 	quiet := time.Duration(cycle.Drain.QuietS) * time.Second
 	topic := "orders." + cycle.ID
-	last, since := int64(-1), time.Now()
+	var last [2]int64
+	last[0] = -1
+	since := time.Now()
 	for {
 		offsets, err := r.admin.ListEndOffsets(ctx, topic)
 		if err != nil {
 			return fmt.Errorf("list end offsets: %w", err)
 		}
-		var total int64
-		offsets.Each(func(o kadm.ListedOffset) { total += o.Offset })
-		if total != last {
-			last, since = total, time.Now()
+		var current [2]int64
+		offsets.Each(func(o kadm.ListedOffset) { current[0] += o.Offset })
+		if cycle.Pattern == "P3" {
+			err := conn.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE sent_at IS NULL`).Scan(&current[1])
+			if err != nil {
+				return fmt.Errorf("count unsent: %w", err)
+			}
 		}
-		if time.Since(since) >= quiet {
+		if current != last {
+			last, since = current, time.Now()
+		}
+		if time.Since(since) >= quiet && current[1] == 0 {
 			return nil
 		}
 		if err := sleep(ctx, 500*time.Millisecond); err != nil {

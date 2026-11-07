@@ -40,6 +40,8 @@ Evidence: `experiments/trials/2026-11-07/clean-rerun/`, `outage-idempotence-{on,
 Limits: two runs per setting, one outage type. Must be repeated with a TCP reset and with a broker stop before it is generalised.
 Consistent with the franz-go docs: the timeout is evaluated before writing a request or after a produce response.
 
+**Update: this depends on the outage type (see F11).** It holds for a proxy cut and a broker stop, not for connection resets or a blackhole with idempotence off.
+
 ## F2. The 8.8 s delivery came from idempotence, not a long request (Trial)
 
 Our first hypothesis was one long in-flight produce request. The trace refuted it: the request ended at once with EOF when the proxy was cut. With idempotence on, records of unknown outcome were held and delivered after reconnecting; with it off, they failed instead (see F1).
@@ -103,13 +105,90 @@ Mean 11.6 s (range 10.0–12.5) across 39 cycles of A-1, A-2 and A-8, of which 1
 
 4 of 39 cycles had p99 above 30 ms against a median of 6.4 ms: r11 (200 ms), r14 (300 ms), r18 (127 ms), A-2 r03 (79 ms). r11 and r14 overlapped a lint run on the same Mac. r18 and A-2 r03 did not clearly do so. Keep the machine idle during P-1, and look at this again in Milestone 7.
 
+## F11. Whether the delivery timeout fires depends on how the outage looks to the client (Trial)
+
+P2, 100 orders/s, 8 s outage, one run per row:
+
+| Outage | Idempotence | First failure after fault starts | Failed during outage | Failed in total | Lost | Out of order | Slowest delivery |
+|---|---|---|---|---|---|---|---|
+| Proxy cut | on | 8.9 s (after restore) | 0 | 1,580 | 0 | 271 | 9.1 s |
+| Proxy cut | off | 8.7 s (after restore) | 0 | 1,555 | 0 | 203 | 8.9 s |
+| Blackhole, both directions | on | none | 0 | 0 | 0 | 0 | 8.1 s |
+| Blackhole, both directions | off | 6.3 s | 1,127 | 4,934 | 0 | 386 | 14.0 s |
+| Connection reset | on | 5.4 s | 642 | 2,206 | 0 | 283 | 13.4 s |
+| Broker stop | on | 10.5 s (after restore) | 0 | 2,759 | 0 | 331 | 15.8 s |
+| Broker stop | off | 10.7 s (after restore) | 0 | 4,702 | 0 | 500 | 16.2 s |
+| Proxy cut, `RecordRetries=3` | on | 8.7 s (after restore) | 0 | 1,028 | 0 | 156 | 8.9 s |
+| Proxy cut, `RecordRetries=3` | off | 8.5 s (after restore) | 0 | 1,535 | 0 | 158 | 8.7 s |
+
+Evidence: `experiments/trials/2026-11-07/outage-types/`, `analysis/diagnostics/outage_types.sh`, `outage_summary.py`.
+Limits: one run per row, 8 s outages, P2 only.
+
+## F12. P2's retries prevent loss in a short outage, but reorder events (Trial)
+
+In all 9 outages above, P2 lost nothing: every failed record was retried and delivered, with 0 `RETRY_EXHAUSTED`. P1 lost about 1,500 in the same kind of outage (F1). The cost is ordering: 156–500 out-of-order events in 8 of the 9 runs, the exception being the blackhole with idempotence on, which failed nothing. A retried older version lands after a newer one.
+
+Retries therefore do help with an outage when the process survives. They do not help when it crashes: A-1 lost the hooked event every time.
+
+## F13. Crash comparison across patterns (Trial, 2–3 repeats per case)
+
+Same crash after commit: P1 and P2 lost the hooked event every time. P3, P4 and P5 lost nothing (A-1b, 3 cycles each). Window p50: 5 ms for P1 and P2, 240 ms for P3, about 530 ms for P4 and P5. A-5: 0 damage. A-4: no loss, up to 92 duplicates per crash, and 18–19 stale redeliveries in two cycles.
+
+Evidence: `experiments/trials/2026-11-07/m6-crash-comparison/`.
+
+## F14. The CDC window follows Debezium's poll interval (Trial)
+
+| `poll.interval.ms` | Pattern | Window p50 | Window p99 | Window max |
+|---|---|---|---|---|
+| 100 | P4 | 105 ms | 196 ms | 245 ms |
+| 100 | P5 | 103 ms | 193 ms | 205 ms |
+| 500 | P4 | 509 ms | 919 ms | 996 ms |
+| 500 | P5 | 540 ms | 943 ms | 1,006 ms |
+
+So the roughly 530 ms window is a default setting, not a property of CDC. p50 is about 1× the interval and the maximum about 2×, which suggests two polling stages in series. That mechanism is an inference, not confirmed from Debezium's source. The P3-versus-P4 window difference must be reported with both poll intervals stated. No damage at either setting.
+
+Evidence: `experiments/trials/2026-11-07/m6-poll-and-batch/`. One run per row.
+
+## F15. Effective relay batch follows arrivals, not the configured limit (Trial)
+
+P3, about 178 changes/s, `RELAY_BATCH_SIZE=100` unless stated:
+
+| Poll interval | Batch mean | Batch max | Backlog max | Window p50 |
+|---|---|---|---|---|
+| 100 ms | 5.7 | 25 | 24 | 44 ms |
+| 500 ms | 21 | 100 | 92 | 243 ms |
+| 1,000 ms | 28 | 100 | 191 | 485 ms |
+| 5,000 ms | 79 | 100 | 894 | 2,515 ms |
+| 500 ms, `RELAY_BATCH_SIZE=1` | 1 | 1 | 1,342 | 4,809 ms |
+
+Supports the hypothesis that effective batch = min(limit, rows arrived since the last poll). With batch size 1 the relay falls behind: backlog reached 1,342 rows.
+
+Evidence: as F14. One run per row, no crash.
+
+## F16. Shortened no-fault control passes for all five patterns (Trial)
+
+10 minutes per pattern at 100 orders/s, without consumers: about 549,000 events in total, with 0 lost, ghost, duplicate or out-of-order events. This is not C0-1 itself, which needs one hour and consumers.
+
+Evidence: `experiments/trials/2026-11-07/m6-control-10min/`.
+
+## F17. Pre-cycle latency blips occur with the Mac idle (Trial, open)
+
+P3's check in F16 read 275 ms while the full 10-minute p99 was 5.3 ms, with the Mac nearly idle. Earlier, 8 of 31 cycles were flagged at low host load. So these blips are not explained by use of the Mac. The cause is unknown.
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.
 
+- **H-REORDER: retries swap loss for reordering.** Early support in F12. Test: compare `lost`, `out_of_order` and `stale_redelivery` for P2 against P1 (no retries) and P3–P5 (ordered publishing) in C-1, C-2, C-3r and A-3r. These columns are written for every cycle; C-2 and A-3r cover only the patterns the catalogue lists.
+- **H-BATCH: effective batch = min(`RELAY_BATCH_SIZE`, rows arrived since the last poll).** Early support in F15. Original A-7 hypothesis, kept for the record: "Duplicate probability and size grow with batch size."
+
 - **A-3:** "Every event waiting in the in-memory retry queue is lost; retries do not fix dual write." At risk from F1: the retry path may not run during an outage.
 - **C-3:** "P2 loses its queued retries; the P3 outbox survives the publisher crash." Same risk.
 - **B-3:** Idempotence on: in-flight records cannot time out. Off: records time out and P2 duplicates them.
+
+## Analysis rule (fixed before the final runs)
+
+Every result is reported over all cycles and again excluding `pre_flag` cycles, with "all cycles" as the primary number (spec Section 15).
 
 ## Design decisions the paper should explain
 

@@ -29,11 +29,18 @@ type Pattern interface {
 
 // New returns the pattern selected by cfg.Pattern.
 func New(cfg config.Config, st *store.Store, pub *publish.Publisher) (Pattern, error) {
+	dual := dualWrite{store: st, publisher: pub, pattern: cfg.Pattern, cycleID: cfg.CycleID}
 	switch cfg.Pattern {
 	case "P1":
-		return &naive{store: st, publisher: pub, pattern: cfg.Pattern, cycleID: cfg.CycleID}, nil
+		return &naive{dual}, nil
+	case "P2":
+		return &retrying{dualWrite: dual, max: cfg.RetryMax, base: cfg.RetryBase, limit: cfg.RetryCap}, nil
+	case "P3", "P4":
+		return &outbox{store: st, pattern: cfg.Pattern, cycleID: cfg.CycleID}, nil
+	case "P5":
+		return &cdc{store: st, pattern: cfg.Pattern, cycleID: cfg.CycleID}, nil
 	}
-	return nil, fmt.Errorf("pattern %s is not implemented yet", cfg.Pattern)
+	return nil, fmt.Errorf("unknown pattern %s", cfg.Pattern)
 }
 
 func upsertOrder(ctx context.Context, tx pgx.Tx, change OrderChange) (store.Order, error) {

@@ -1,0 +1,26 @@
+{
+  "name": "p5-{{cycle_id}}-{{run_id}}",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "toxiproxy", "database.port": "15433",
+    "database.user": "app", "database.password": "app", "database.dbname": "shop",
+    "slot.name": "slot_{{cycle_slug}}",
+    "publication.name": "pub_orders",
+    "publication.autocreate.mode": "disabled",
+    "snapshot.mode": "no_data",
+    "poll.interval.ms": "{{poll_ms}}",
+    "topic.prefix": "cdc{{cycle_slug}}",
+    "table.include.list": "public.orders",
+    "decimal.handling.mode": "double",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": ".*\\.public\\.orders",
+    "transforms.route.replacement": "orders.{{cycle_id}}",
+    "producer.override.acks": "{{acks}}"
+  }
+}

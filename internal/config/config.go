@@ -36,6 +36,16 @@ type Config struct {
 	KafkaRequestOverhead time.Duration // KAFKA_REQUEST_OVERHEAD_MS, default 1000
 	KafkaDeliveryTimeout time.Duration // KAFKA_DELIVERY_TIMEOUT_MS, default 5000
 	KafkaTraceAttempts   bool          // KAFKA_TRACE_ATTEMPTS, default false; logs every produce request
+	// KafkaMaxBuffered is the client's record buffer. Produce blocks when it is full.
+	KafkaMaxBuffered   int // KAFKA_MAX_BUFFERED_RECORDS, default 50000
+	KafkaRecordRetries int // KAFKA_RECORD_RETRIES, default 0, meaning unlimited
+
+	RetryMax  int           // RETRY_MAX, default 5
+	RetryBase time.Duration // RETRY_BASE_MS, default 200
+	RetryCap  time.Duration // RETRY_CAP_MS, default 5000
+
+	RelayBatchSize    int           // RELAY_BATCH_SIZE, default 100
+	RelayPollInterval time.Duration // RELAY_POLL_INTERVAL_MS, default 500
 }
 
 // Topic returns the cycle's Kafka topic.
@@ -61,6 +71,13 @@ func Load() (Config, error) {
 		KafkaRequestOverhead: millis("KAFKA_REQUEST_OVERHEAD_MS", 1000, &errs),
 		KafkaDeliveryTimeout: millis("KAFKA_DELIVERY_TIMEOUT_MS", 5000, &errs),
 		KafkaTraceAttempts:   boolean("KAFKA_TRACE_ATTEMPTS", false, &errs),
+		KafkaMaxBuffered:     integer("KAFKA_MAX_BUFFERED_RECORDS", 50000, &errs),
+		KafkaRecordRetries:   integer("KAFKA_RECORD_RETRIES", 0, &errs),
+		RetryMax:             integer("RETRY_MAX", 5, &errs),
+		RetryBase:            millis("RETRY_BASE_MS", 200, &errs),
+		RetryCap:             millis("RETRY_CAP_MS", 5000, &errs),
+		RelayBatchSize:       integer("RELAY_BATCH_SIZE", 100, &errs),
+		RelayPollInterval:    millis("RELAY_POLL_INTERVAL_MS", 500, &errs),
 	}
 	if cfg.CycleID == "" {
 		errs = append(errs, errors.New("CYCLE_ID is required"))
@@ -79,14 +96,23 @@ func Load() (Config, error) {
 type Measurement struct {
 	PostgresDSN  string   // POSTGRES_DIRECT_DSN
 	KafkaBrokers []string // KAFKA_DIRECT_BROKERS, comma separated
+	ConnectURL   string   // CONNECT_URL
+	// A cycle starting above either threshold is flagged, not stopped.
+	PrecheckMaxP99MS    float64 // PRECHECK_MAX_P99_MS, default 30
+	PrecheckMaxHostLoad float64 // PRECHECK_MAX_HOST_LOAD, default 8
 }
 
 // LoadMeasurement reads Measurement from the environment.
-func LoadMeasurement() Measurement {
-	return Measurement{
-		PostgresDSN:  str("POSTGRES_DIRECT_DSN", "postgres://app:app@localhost:55432/shop"),
-		KafkaBrokers: strings.Split(str("KAFKA_DIRECT_BROKERS", "localhost:29091"), ","),
+func LoadMeasurement() (Measurement, error) {
+	var errs []error
+	measurement := Measurement{
+		PostgresDSN:         str("POSTGRES_DIRECT_DSN", "postgres://app:app@localhost:55432/shop"),
+		KafkaBrokers:        strings.Split(str("KAFKA_DIRECT_BROKERS", "localhost:29091"), ","),
+		ConnectURL:          str("CONNECT_URL", "http://localhost:8083"),
+		PrecheckMaxP99MS:    float64(integer("PRECHECK_MAX_P99_MS", 30, &errs)),
+		PrecheckMaxHostLoad: float64(integer("PRECHECK_MAX_HOST_LOAD", 8, &errs)),
 	}
+	return measurement, errors.Join(errs...)
 }
 
 // LoadGen holds the load generator settings (SPEC 15).

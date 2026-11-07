@@ -42,6 +42,9 @@ func run() error {
 	dryRun := flag.Bool("dry-run", false, "print the plan and exit")
 	overhead := flag.Float64("overhead", 75, "with -dry-run, fixed seconds per cycle")
 	allowDirty := flag.Bool("allow-dirty", false, "run on a dirty tree, marking the commit -dirty")
+	duration := flag.Int("duration", 0, "trial only: override load duration_s; recorded in env_json")
+	noConsumers := flag.Bool("no-consumers", false, "trial only: drop consumers; recorded in env_json")
+	overrides := flag.String("env", "", "trial only: comma-separated KEY=VALUE overrides; recorded in env_json")
 	merge := flag.Bool("merge", false, "merge results/results.*.csv into results/results.csv")
 	flag.Parse()
 
@@ -75,6 +78,21 @@ func run() error {
 		return err
 	}
 	cycles := selectCycles(all, split(*vectors), split(*patterns), *repeats, shard, *perf)
+	for i := range cycles {
+		if *duration > 0 {
+			cycles[i].Load.DurationS = *duration
+			cycles[i].Env["TRIAL_DURATION_S"] = fmt.Sprint(*duration)
+		}
+		for _, pair := range split(*overrides) {
+			key, value, _ := strings.Cut(pair, "=")
+			cycles[i].Env[key] = value
+			cycles[i].Env["TRIAL_OVERRIDE"] = *overrides
+		}
+		if *noConsumers {
+			cycles[i].Topology.Consumers = nil
+			cycles[i].Env["TRIAL_NO_CONSUMERS"] = "true"
+		}
+	}
 	if *dryRun {
 		fmt.Print(runner.FormatEstimates(runner.EstimateRun(cycles), *overhead))
 		return nil
@@ -110,7 +128,7 @@ func run() error {
 	}
 
 	// The service image must match the commit recorded in every row.
-	build := exec.Command("docker", "compose", "--profile", "app", "build", "orderservice")
+	build := exec.Command("docker", "compose", "--profile", "app", "build", "orderservice", "relay")
 	if output, err := build.CombinedOutput(); err != nil {
 		return fmt.Errorf("build image: %w: %s", err, output)
 	}
@@ -129,7 +147,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	versions, err := docker.Versions(ctx, runner.BaseContainers, []string{"dualwrite/orderservice:dev"})
+	versions, err := docker.Versions(ctx, runner.BaseContainers, []string{"dualwrite/orderservice:dev", "dualwrite/relay:dev"})
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,13 @@
+cut_on                 first_fail_s=  8.9 restored_s=8.1 failed_during=    0 failed_total= 1580 retries= 1580 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=9.08
+blackhole_on           first_fail_s=    - restored_s=8.1 failed_during=    0 failed_total=    0 retries=    0 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=8.12
+reset_on               first_fail_s=  5.4 restored_s=8.1 failed_during=  642 failed_total= 2206 retries= 2206 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=13.43
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+ValueError: Invalid isoformat string: '2026-11-07T04:01:51.7163Z+00:00'
+cut_off                first_fail_s=  8.7 restored_s=8.1 failed_during=    0 failed_total= 1555 retries= 1555 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=8.86
+blackhole_off          first_fail_s=  6.3 restored_s=8.1 failed_during= 1127 failed_total= 4934 retries= 4934 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=13.95
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+ValueError: Invalid isoformat string: '2026-11-07T04:04:21.89056Z+00:00'
+cut_on_r3              first_fail_s=  8.7 restored_s=8.1 failed_during=    0 failed_total= 1028 retries= 1028 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=8.88
+cut_off_r3             first_fail_s=  8.5 restored_s=8.1 failed_during=    0 failed_total= 1535 retries= 1535 exhausted=   0 lost=    0 dup=   0 stale=  0 window_max_s=8.73

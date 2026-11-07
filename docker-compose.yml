@@ -71,9 +71,13 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       # Every topic is created explicitly, so a wrong topic name fails loudly.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # On a volume: recreating the broker must not wipe Connect's internal topics.
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
     ports:
       - "29091:29091"
+    volumes:
+      - kafka-1:/var/lib/kafka/data
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29091"]
       interval: 5s
@@ -142,6 +146,7 @@ services:
       KAFKA_SYNC_SEND: ${KAFKA_SYNC_SEND:-false}
       KAFKA_REQUEST_OVERHEAD_MS: ${KAFKA_REQUEST_OVERHEAD_MS:-1000}
       KAFKA_TRACE_ATTEMPTS: ${KAFKA_TRACE_ATTEMPTS:-false}
+      KAFKA_RECORD_RETRIES: ${KAFKA_RECORD_RETRIES:-0}
       CRASH_AT: ${CRASH_AT:-}
       CRASH_AFTER_N: ${CRASH_AFTER_N:-50}
     ports:
@@ -152,6 +157,16 @@ services:
       timeout: 2s
       retries: 15
 
+  # Built here so the runner can create it; never started by compose.
+  relay:
+    profiles: [app]
+    build:
+      context: .
+      args:
+        CMD: relay
+    image: dualwrite/relay:dev
+
 volumes:
   pg-primary:
   pg-replica:
+  kafka-1:

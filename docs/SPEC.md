@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 1.5 · November 2026"
+subtitle: "Go implementation · version 1.8 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -267,10 +267,13 @@ A thin wrapper around `kgo.Client` with settings taken from config, never defaul
 | Request timeout | `KAFKA_REQUEST_TIMEOUT_MS` (`kgo.ProduceRequestTimeout`) | F-1, F-2 |
 | Delivery timeout | `KAFKA_DELIVERY_TIMEOUT_MS` (`kgo.RecordDeliveryTimeout`) | A-3, B-3, C-1 |
 | Request timeout overhead | `KAFKA_REQUEST_OVERHEAD_MS` (`kgo.RequestTimeoutOverhead`, default 1000 here; library default 10 s) | F-2, F-3 |
+| Record buffer | `KAFKA_MAX_BUFFERED_RECORDS` (`kgo.MaxBufferedRecords`, default 50000) | C-1 |
 
 It logs three markers per event (Section 13): `SENT_CALLED` when `Produce` is called, `SEND_ACKED` in the promise callback on success, `SEND_FAILED` on error. These markers distinguish loss before sending from loss in the producer buffer.
 
 **Client-internal retries:** franz-go retries failed produce requests itself. A record only fails back to the application once `KAFKA_DELIVERY_TIMEOUT_MS` expires, so P2's application-level retries start only after that. Always set the delivery timeout explicitly; with the library default the P2 retry path may never run.
+
+**Buffer limit (decided).** The buffer stays at 50,000. C-1's 300 s outage needs about 53,400 records at 178 events/s, so `Produce` blocks and the backpressure reaches the application. This is deliberate: the blocking is part of the result. Every row records the value in `env_json`.
 
 **franz-go behaviours the paper must report** (from the library source; to be confirmed under real faults):
 
@@ -413,6 +416,10 @@ Worker settings only take effect when Kafka Connect is recreated, so the runner 
 
 `exactly.once.support: "required"` is added only when `CONNECT_EOS=on`.
 
+`poll.interval.ms` is set explicitly from `DEBEZIUM_POLL_INTERVAL_MS` (default 500) and recorded in `env_json`.
+
+The templates in `deploy/connect/` also set what the study needs but this listing omits: `publication.autocreate.mode=disabled`, `snapshot.mode=no_data` (the cycle's tables are empty, and Debezium 3 replaced `never` with `no_data`), and converters. P4 uses `StringConverter` so the payload reaches Kafka as the common event schema. P5 uses `JsonConverter` without schemas and `decimal.handling.mode=double`.
+
 P5 uses the same base with `table.include.list = public.orders`, `topic.prefix = cdc{{cycle_slug}}`, and a `RegexRouter` instead of the outbox transform:
 
 ```json
@@ -423,6 +430,8 @@ P5 uses the same base with `table.include.list = public.orders`, `topic.prefix =
 ```
 
 **Failover recovery (`CDC_FAILOVER_RECOVERY`, D-1, D-2, H-2):** after promotion the slot does not exist on the new primary (PG16). The runner deletes the connector and recreates it against the new primary with a new slot and either `snapshot.mode=never` (`new_slot_no_snapshot`) or `snapshot.mode=initial` (`new_slot_initial_snapshot`).
+
+**Connector names include the run ID.** Connect keeps offsets by connector name after the connector is deleted, so a retried cycle would otherwise resume from a position that no longer exists.
 
 **Per-cycle hygiene:** create the connector at cycle start; at cycle end delete the connector **and** drop its replication slot (`SELECT pg_drop_replication_slot(...)`). Leftover slots retain WAL and leak state between cycles.
 
@@ -470,6 +479,8 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 | hooked_lost / hooked_dup | damage to the event(s) named in `CRASH_POINT_HIT` |
 | collateral_lost / collateral_dup | the same metrics for every other event |
 | inflight_at_crash / oldest_pending_ms | records with `SENT_CALLED` but no outcome at `CRASH_POINT_HIT`, and the age of the oldest |
+| relay_batches / batch_rows_mean / batch_rows_max | number of relay batches and the rows they actually held, from `RELAY_BATCH` markers (`phase=read`). The effective batch can be far below `RELAY_BATCH_SIZE` |
+| outbox_backlog_max | maximum unsent outbox rows, sampled every second (P3), so a relay falling behind is measured rather than inferred from the window |
 | wal_retained_bytes_max | maximum `pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)` of the cycle's slot, sampled every second (P4/P5) |
 
 **Version history:** DB is built from `orders_history` (Section 5.1), which a trigger fills on every insert/update of `orders`. The trigger runs in all patterns, so its overhead is equal across them.
@@ -554,6 +565,10 @@ RESET → START → WARMUP → FAULT → RECOVER → DRAIN → CHECK → RECORD 
 | RECORD | Append CSV row; write damage JSON; keep logs if damage > 0 or status ≠ OK | — |
 | REBUILD | Only for `requires_rebuild` vectors (Section 12) | 180 s |
 
+**Pre-cycle health check.** During the last 5 s of warm-up, before any fault is armed, the runner samples the Mac's load average, Postgres CPU and p99 latency, and records them as `pre_host_load`, `pre_db_cpu_pct` and `pre_p99_ms`. A cycle above `PRECHECK_MAX_P99_MS` (default 30) or `PRECHECK_MAX_HOST_LOAD` (default 8) gets `pre_flag` set to `latency`, `load` or both. It flags and never stops, so a spike can be traced to the machine or to the system.
+
+**Preflight.** The run refuses to start if Connect's internal topics are missing or the disk has under 20 GB free.
+
 Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one bad cycle never stops the run. A violated control `assert` marks `CONTROL_FAIL` and **does** stop the run. The runner is resumable: it skips cycles already present in `results.csv`.
 
 **Sharding.** `--shard i/n` runs only the vectors whose `hash(vector_id) mod n = i-1`, so n laptops split the catalogue with no overlap and every cycle of a vector runs on one machine, and each writes `results/results.<host>.csv`. All laptops must use the same git commit and image digests (checked at start and recorded in every row). Performance vectors (`group: perf`) are never sharded: they run on one designated machine.
@@ -564,14 +579,16 @@ Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one b
 
 ```
 run_id, cycle_id, vector_id, pattern, mode, fault, crash_point, repeat, seed,
-status, sweep_json, versions_json, load_rate, orders_total, events_total,
+status, sweep_json, env_json, versions_json, load_rate, orders_total, events_total,
 lost, ghost, duplicates, out_of_order, stale_redelivery, lost_after_send,
 hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
-wal_retained_bytes_max, send_failed, crash_after_n, inflight_at_crash, oldest_pending_ms,
+wal_retained_bytes_max, outbox_backlog_max, relay_batches, batch_rows_mean, batch_rows_max,
+send_failed, crash_after_n, inflight_at_crash, oldest_pending_ms,
 host, shard, git_commit,
 window_p50_ms, window_p99_ms, window_max_ms, recovery_s,
-throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s, started_at, finished_at
+throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s,
+pre_host_load, pre_db_cpu_pct, pre_p99_ms, pre_flag, started_at, finished_at
 ```
 
 Every row carries the random seed and the pinned versions so any cycle can be replayed.
@@ -595,6 +612,8 @@ make report                # run analysis scripts → figures/
 **Analysis:** Python scripts in `analysis/` read `results.csv` and produce, at minimum:
 damage by pattern × fault (bars with 95% confidence intervals), a pattern × fault heatmap, knob sweeps (lines), exactly-once on/off and consumer-strategy comparisons, and inconsistency-window distributions.
 
+**Analysis rule, fixed before the final runs.** Every result is reported twice: over all cycles, and excluding cycles with a `pre_flag`. "All cycles" is the primary number. Flagged cycles are never dropped from the data. The rule is set in advance because deciding after seeing the data would bias the results.
+
 # 16. Docker Compose requirements
 
 - All services `init: true` (crash hooks, Section 7).
@@ -612,6 +631,7 @@ damage by pattern × fault (bars with 95% confidence intervals), a pattern × fa
 - Clients connect to whatever address each broker **advertises**, so a single proxy cannot front three brokers. Each client class needs its **own broker listener and port**: `APP` on 9092 advertising `toxiproxy:1909N`, `CONNECT` on 9094 advertising `toxiproxy:1919N`. If both proxies pointed at 9092, the broker would advertise the app proxy to Connect and app-side faults would hit CDC too.
 - Measurement never goes through Toxiproxy: the checker and runner read Postgres directly and reach Kafka on `INTERNAL` (9093, in-network) or `HOST` (published to the Mac as `localhost:2909N`, because the host cannot resolve `broker-N`).
 - Kafka Connect uses its own internal topics (`connect-configs`, `connect-offsets`, `connect-status`), which are **not** reset per cycle; per-cycle connector names and slots keep cycles isolated.
+- Broker data lives on a named volume per broker (`kafka-N`). Without it, recreating a broker wipes Connect's internal topics and Connect floods its log (finding F0).
 
 # 17. Testing the harness itself
 
@@ -645,7 +665,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 1.5
+# 20. Changes in versions 1.1 to 1.8
 
 | # | Area | Change |
 |---|---|---|
@@ -680,3 +700,14 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 29 | 7 | (1.4) Crash and stall points armed by SIGUSR1 after warm-up; randomised firing point `crash_after_n` |
 | 30 | 7, 11.2, 14.3 | (1.4) `inflight_at_crash`, `oldest_pending_ms`, `load_s` columns |
 | 31 | 14.2 | (1.5) Run-time budget updated with the overhead measured in Milestone 5 |
+| 32 | 6.4 | (1.6) Buffer stays at 50,000 by decision; `KAFKA_MAX_BUFFERED_RECORDS` recorded per row in `env_json` |
+| 33 | 14.2, 14.3 | (1.6) Pre-cycle health check with `pre_*` columns; preflight check |
+| 34 | 16 | (1.6) Broker data on a named volume |
+| 35 | 9.3 | (1.6) Connector settings the templates need beyond the listing |
+| 36 | 11.2, 14.3 | (1.7) Measured relay batch sizes and `outbox_backlog_max` |
+| 37 | 14.1 | (1.7) A-7 extended with load and poll-interval cells; effective-batch hypothesis |
+| 38 | 9.3 | (1.7) `DEBEZIUM_POLL_INTERVAL_MS` set explicitly and recorded |
+| 39 | 9.3 | (1.7) Connector names include the run ID |
+| 40 | 14.1 | (1.8) A-3r and C-3r: connection-reset variants that trigger the retry path during the outage; originals kept |
+| 41 | 14.1 | (1.8) A-7 prioritises poll-interval cells; 1,000/s cells depend on P-1 |
+| 42 | 15 | (1.8) Analysis rule: report with and without flagged cycles, all cycles primary |

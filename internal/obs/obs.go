@@ -9,14 +9,17 @@ import (
 
 // Log markers the checker and runner search for.
 const (
-	Armed         = "POINTS_ARMED"
-	CrashPointHit = "CRASH_POINT_HIT"
-	StallPointHit = "STALL_POINT_HIT"
-	StallPointEnd = "STALL_POINT_END"
-	ProduceTrace  = "PRODUCE_REQUEST"
-	SentCalled    = "SENT_CALLED"
-	SendAcked     = "SEND_ACKED"
-	SendFailed    = "SEND_FAILED"
+	Armed          = "POINTS_ARMED"
+	CrashPointHit  = "CRASH_POINT_HIT"
+	StallPointHit  = "STALL_POINT_HIT"
+	StallPointEnd  = "STALL_POINT_END"
+	ProduceTrace   = "PRODUCE_REQUEST"
+	SentCalled     = "SENT_CALLED"
+	SendAcked      = "SEND_ACKED"
+	SendFailed     = "SEND_FAILED"
+	RetryScheduled = "RETRY_SCHEDULED"
+	RetryExhausted = "RETRY_EXHAUSTED"
+	RelayBatch     = "RELAY_BATCH"
 )
 
 // Setup installs the JSON logger with the fields required on every line.

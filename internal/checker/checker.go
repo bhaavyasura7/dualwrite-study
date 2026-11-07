@@ -39,6 +39,7 @@ type Input struct {
 	SendFailed      int            `json:"send_failed"` // SEND_FAILED markers
 	InflightAtCrash int            `json:"inflight_at_crash"`
 	OldestPendingMS float64        `json:"oldest_pending_ms"`
+	BatchRows       []int          `json:"batch_rows"`  // rows per relay batch, from RELAY_BATCH
 	Payments        map[string]int `json:"payments"`    // rows per consumer strategy; nil outside group G
 	PaidOrders      int            `json:"paid_orders"` // orders whose final status is PAID
 }
@@ -61,12 +62,16 @@ type Result struct {
 	CollateralDup   int `json:"collateral_dup"`
 	SendFailed      int `json:"send_failed"`
 	// In-flight state at the crash, so collateral loss can be reported against it.
-	InflightAtCrash int            `json:"inflight_at_crash"`
-	OldestPendingMS float64        `json:"oldest_pending_ms"`
-	BusinessDamage  map[string]int `json:"business_damage,omitempty"`
-	WindowP50MS     float64        `json:"window_p50_ms"`
-	WindowP99MS     float64        `json:"window_p99_ms"`
-	WindowMaxMS     float64        `json:"window_max_ms"`
+	InflightAtCrash int     `json:"inflight_at_crash"`
+	OldestPendingMS float64 `json:"oldest_pending_ms"`
+	// Actual relay batch sizes, which can be far below RELAY_BATCH_SIZE.
+	RelayBatches   int            `json:"relay_batches"`
+	BatchRowsMean  float64        `json:"batch_rows_mean"`
+	BatchRowsMax   int            `json:"batch_rows_max"`
+	BusinessDamage map[string]int `json:"business_damage,omitempty"`
+	WindowP50MS    float64        `json:"window_p50_ms"`
+	WindowP99MS    float64        `json:"window_p99_ms"`
+	WindowMaxMS    float64        `json:"window_max_ms"`
 }
 
 // Damage lists the exact pairs behind each metric, for root-cause analysis.
@@ -87,6 +92,16 @@ func Check(in Input) (Result, Damage) {
 		SendFailed:      in.SendFailed,
 		InflightAtCrash: in.InflightAtCrash,
 		OldestPendingMS: in.OldestPendingMS,
+	}
+
+	result.RelayBatches = len(in.BatchRows)
+	if len(in.BatchRows) > 0 {
+		total := 0
+		for _, rows := range in.BatchRows {
+			total += rows
+			result.BatchRowsMax = max(result.BatchRowsMax, rows)
+		}
+		result.BatchRowsMean = float64(total) / float64(len(in.BatchRows))
 	}
 
 	committed := make(map[Pair]time.Time, len(in.DB))

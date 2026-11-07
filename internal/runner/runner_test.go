@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,5 +211,29 @@ func TestMerge(t *testing.T) {
 	}
 	if _, err := Merge([]string{a, write("results.d.csv", row("z", "other"))}, target); err == nil {
 		t.Error("mixed commits accepted")
+	}
+}
+
+func TestConnectorConfig(t *testing.T) {
+	t.Chdir("../..")
+	for pattern, want := range map[string]string{"P4": `"orders.A-1b_P4_r02"`, "P5": `"orders.A-1b_P5_r02"`} {
+		raw, err := connectorConfig(Cycle{ID: "A-1b_" + pattern + "_r02", Pattern: pattern, Env: map[string]string{"KAFKA_ACKS": "all", "DEBEZIUM_POLL_INTERVAL_MS": "500"}}, "abc-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(raw)
+		var parsed map[string]any
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(text, "_r02-abc-1\"") {
+			t.Errorf("%s: name lacks the run id", pattern)
+		}
+		if strings.Contains(text, "{{") || !strings.Contains(text, want) || !strings.Contains(text, `"15433"`) {
+			t.Errorf("%s: %s", pattern, text)
+		}
+		if !strings.Contains(text, `"slot_a_1b_`+strings.ToLower(pattern)+`_r02"`) {
+			t.Errorf("%s: bad slot name", pattern)
+		}
 	}
 }

@@ -41,6 +41,10 @@ func options(cfg config.Config) []kgo.Opt {
 		kgo.RequestTimeoutOverhead(cfg.KafkaRequestOverhead),
 		kgo.RecordDeliveryTimeout(cfg.KafkaDeliveryTimeout),
 		kgo.ProducerBatchCompression(kgo.NoCompression()),
+		kgo.MaxBufferedRecords(cfg.KafkaMaxBuffered),
+	}
+	if cfg.KafkaRecordRetries > 0 {
+		opts = append(opts, kgo.RecordRetries(cfg.KafkaRecordRetries))
 	}
 	if cfg.KafkaAcks == "1" {
 		opts = append(opts, kgo.RequiredAcks(kgo.LeaderAck()))
@@ -78,23 +82,10 @@ func (requestTracer) OnBrokerE2E(_ kgo.BrokerMetadata, key int16, e kgo.BrokerE2
 // Send produces ev. In async mode it returns once the record is buffered and
 // delivery failures only reach the log. In sync mode it waits for the outcome.
 func (p *Publisher) Send(ctx context.Context, ev events.Event) error {
-	value, err := json.Marshal(ev)
-	if err != nil {
-		return fmt.Errorf("marshal event: %w", err)
-	}
-	record := &kgo.Record{Key: []byte(ev.OrderID.String()), Value: value}
-
 	done := make(chan error, 1)
-	slog.Info(obs.SentCalled, "event_id", ev.EventID, "order_id", ev.OrderID, "seq", ev.Seq)
-	// The record must outlive the HTTP request that created it.
-	p.client.Produce(context.WithoutCancel(ctx), record, func(r *kgo.Record, err error) {
-		if err != nil {
-			slog.Error(obs.SendFailed, "event_id", ev.EventID, "error", err)
-		} else {
-			slog.Info(obs.SendAcked, "event_id", ev.EventID, "partition", r.Partition, "offset", r.Offset)
-		}
-		done <- err
-	})
+	if err := p.SendAsync(ctx, ev, func(err error) { done <- err }); err != nil {
+		return err
+	}
 	if !p.sync {
 		return nil
 	}
@@ -104,6 +95,45 @@ func (p *Publisher) Send(ctx context.Context, ev events.Event) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// SendAsync produces ev and reports the outcome to done.
+func (p *Publisher) SendAsync(ctx context.Context, ev events.Event, done func(error)) error {
+	value, err := json.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+	record := &kgo.Record{Key: []byte(ev.OrderID.String()), Value: value}
+
+	slog.Info(obs.SentCalled, "event_id", ev.EventID, "order_id", ev.OrderID, "seq", ev.Seq)
+	// The record must outlive the HTTP request that created it.
+	p.client.Produce(context.WithoutCancel(ctx), record, func(r *kgo.Record, err error) {
+		if err != nil {
+			slog.Error(obs.SendFailed, "event_id", ev.EventID, "error", err)
+		} else {
+			slog.Info(obs.SendAcked, "event_id", ev.EventID, "partition", r.Partition, "offset", r.Offset)
+		}
+		done(err)
+	})
+	return nil
+}
+
+// SendBatch produces every event and waits for all outcomes, returning the first
+// error. Records that succeeded stay in Kafka whatever happens to the others.
+func (p *Publisher) SendBatch(ctx context.Context, batch []events.Event) error {
+	results := make(chan error, len(batch))
+	for _, ev := range batch {
+		if err := p.SendAsync(ctx, ev, func(err error) { results <- err }); err != nil {
+			return err
+		}
+	}
+	var first error
+	for range batch {
+		if err := <-results; err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // Flush waits for all buffered records to be delivered or fail.

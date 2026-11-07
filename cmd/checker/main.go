@@ -51,7 +51,10 @@ func run() error {
 	if *consumers != "" {
 		strategies = strings.Split(*consumers, ",")
 	}
-	measurement := config.LoadMeasurement()
+	measurement, err := config.LoadMeasurement()
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
 	in, err := checker.Collect(ctx, measurement.PostgresDSN, measurement.KafkaBrokers, "orders."+*cycle, logReader, strategies)
 	if err != nil {
 		return err

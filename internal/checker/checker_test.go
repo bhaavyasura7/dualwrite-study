@@ -149,6 +149,22 @@ func TestParseLogsInflightAtCrash(t *testing.T) {
 	}
 }
 
+func TestRelayBatchStats(t *testing.T) {
+	logs := `{"msg":"RELAY_BATCH","n":10,"phase":"read"}
+{"msg":"RELAY_BATCH","n":10,"phase":"published"}
+{"msg":"RELAY_BATCH","n":10,"phase":"marked"}
+{"msg":"RELAY_BATCH","n":30,"phase":"read"}
+`
+	evidence, err := ParseLogs(strings.NewReader(logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Check(Input{BatchRows: evidence.BatchRows})
+	if got.RelayBatches != 2 || got.BatchRowsMean != 20 || got.BatchRowsMax != 30 {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestParseLogs(t *testing.T) {
 	logs := `{"msg":"orderservice started"}
 {"msg":"SENT_CALLED","order_id":"a","seq":1}
@@ -156,12 +172,13 @@ goroutine 1 [running]:
 {"msg":"SEND_FAILED","event_id":"e","error":"timeout"}
 {"msg":"SEND_FAILED","event_id":"f","error":"timeout"}
 {"msg":"CRASH_POINT_HIT","order_id":"b","seq":2,"point":"after_db_commit"}
+{"msg":"CRASH_POINT_HIT","batch_id":"x","hooked":[{"order_id":"c","seq":1},{"order_id":"d","seq":3}],"point":"after_publish_before_mark"}
 `
 	got, err := ParseLogs(strings.NewReader(logs))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(got.Sent, []Pair{{"a", 1}}) || !slices.Equal(got.Hooked, []Pair{{"b", 2}}) || got.SendFailed != 2 {
+	if !slices.Equal(got.Sent, []Pair{{"a", 1}}) || !slices.Equal(got.Hooked, []Pair{{"b", 2}, {"c", 1}, {"d", 3}}) || got.SendFailed != 2 {
 		t.Fatalf("got %+v", got)
 	}
 }

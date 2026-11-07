@@ -64,3 +64,14 @@ func TestDecodeRejectsMalformed(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeDebeziumEnvelope(t *testing.T) {
+	value := `{"before":null,"after":{"order_id":"6f1c7a3e-0f3b-4f7e-9a53-0c8f2f1f2f10","status":"PAID","version":2,"amount":499.0,"updated_at":"2026-11-20T10:15:30Z"},"op":"u"}`
+	got, err := Decode([]byte(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Seq != 2 || got.Status != StatusPaid || got.Amount != 499 || got.EventID != uuid.Nil {
+		t.Fatalf("got %+v", got)
+	}
+}

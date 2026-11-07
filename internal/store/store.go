@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -82,4 +83,57 @@ func ChangeStatus(ctx context.Context, tx pgx.Tx, id uuid.UUID, status string) (
 		return Order{}, fmt.Errorf("update order: %w", err)
 	}
 	return order, nil
+}
+
+// InsertOutbox writes the event in the caller's transaction.
+func InsertOutbox(ctx context.Context, tx pgx.Tx, ev events.Event) error {
+	payload, err := json.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO outbox (id, aggregatetype, aggregateid, type, seq, payload)
+		 VALUES ($1, 'order', $2, $3, $4, $5::jsonb)`,
+		ev.EventID, ev.OrderID.String(), ev.Type, ev.Seq, string(payload))
+	if err != nil {
+		return fmt.Errorf("insert outbox: %w", err)
+	}
+	return nil
+}
+
+// ReadUnsent locks up to limit unsent rows, oldest first. Rows locked by another
+// relay are skipped.
+func ReadUnsent(ctx context.Context, tx pgx.Tx, limit int) ([]events.Event, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT payload FROM outbox WHERE sent_at IS NULL ORDER BY created_at
+		 LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("read outbox: %w", err)
+	}
+	defer rows.Close()
+
+	var batch []events.Event
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, fmt.Errorf("scan outbox: %w", err)
+		}
+		ev, err := events.Decode(payload)
+		if err != nil {
+			return nil, err
+		}
+		batch = append(batch, ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read outbox: %w", err)
+	}
+	return batch, nil
+}
+
+// MarkSent records the rows as published.
+func MarkSent(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `UPDATE outbox SET sent_at = now() WHERE id = ANY($1)`, ids); err != nil {
+		return fmt.Errorf("mark sent: %w", err)
+	}
+	return nil
 }
