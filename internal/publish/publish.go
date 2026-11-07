@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -50,7 +51,28 @@ func options(cfg config.Config) []kgo.Opt {
 	if !cfg.KafkaIdempotent || cfg.KafkaAcks == "1" {
 		opts = append(opts, kgo.DisableIdempotentWrite())
 	}
+	if cfg.KafkaTraceAttempts {
+		opts = append(opts, kgo.WithHooks(requestTracer{}))
+	}
 	return opts
+}
+
+// requestTracer logs each produce request's lifetime. With SENT_CALLED and
+// SEND_ACKED it shows whether a slow record sat in one long request or several.
+type requestTracer struct{}
+
+const produceKey = 0
+
+func (requestTracer) OnBrokerE2E(_ kgo.BrokerMetadata, key int16, e kgo.BrokerE2E) {
+	if key != produceKey {
+		return
+	}
+	slog.Info(obs.ProduceTrace,
+		"write_wait_ms", e.WriteWait.Milliseconds(),
+		"read_wait_ms", e.ReadWait.Milliseconds(),
+		"total_ms", (e.WriteWait + e.TimeToWrite + e.ReadWait + e.TimeToRead).Round(time.Millisecond).Milliseconds(),
+		"write_err", fmt.Sprint(e.WriteErr),
+		"read_err", fmt.Sprint(e.ReadErr))
 }
 
 // Send produces ev. In async mode it returns once the record is buffered and

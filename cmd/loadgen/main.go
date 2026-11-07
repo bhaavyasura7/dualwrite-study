@@ -32,12 +32,21 @@ type report struct {
 	LatencyP99MS  float64 `json:"latency_p99_ms"`
 }
 
+// sample is one successful request, for plotting latency over time.
+type sample struct {
+	startMS   float64
+	latencyMS float64
+}
+
 type generator struct {
 	cfg    config.LoadGen
 	client *http.Client
 
+	start time.Time
+
 	mu        sync.Mutex
 	latencies []float64
+	series    []sample
 	requests  int
 	failed    int
 }
@@ -64,9 +73,27 @@ func run() error {
 			Transport: &http.Transport{MaxIdleConns: 2000, MaxIdleConnsPerHost: 2000},
 		},
 	}
-	start := time.Now()
-	orders := g.drive(ctx, start)
-	return json.NewEncoder(os.Stdout).Encode(g.summary(orders, time.Since(start)))
+	g.start = time.Now()
+	orders := g.drive(ctx, g.start)
+	if err := g.writeSeries(); err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(g.summary(orders, time.Since(g.start)))
+}
+
+func (g *generator) writeSeries() error {
+	if g.cfg.LatencyFile == "" {
+		return nil
+	}
+	var out bytes.Buffer
+	out.WriteString("start_ms,latency_ms\n")
+	for _, s := range g.series {
+		fmt.Fprintf(&out, "%.3f,%.3f\n", s.startMS, s.latencyMS)
+	}
+	if err := os.WriteFile(g.cfg.LatencyFile, out.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write latency file: %w", err)
+	}
+	return nil
 }
 
 // drive issues orders until the duration ends, then waits for their follow-ups.
@@ -141,7 +168,9 @@ func (g *generator) post(path string, body []byte) ([]byte, bool) {
 	defer g.mu.Unlock()
 	g.requests++
 	if ok {
-		g.latencies = append(g.latencies, float64(time.Since(began))/float64(time.Millisecond))
+		latency := float64(time.Since(began)) / float64(time.Millisecond)
+		g.latencies = append(g.latencies, latency)
+		g.series = append(g.series, sample{float64(began.Sub(g.start)) / float64(time.Millisecond), latency})
 	} else {
 		g.failed++
 	}

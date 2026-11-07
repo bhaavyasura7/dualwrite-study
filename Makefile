@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker test
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -23,6 +23,9 @@ smoke-order: ## verify the Milestone 2 acceptance criteria (P1 end to end)
 
 smoke-checker: ## verify the Milestone 3 acceptance criteria (checker on real cycles)
 	./deploy/smoke-checker.sh
+
+smoke-crash: ## verify the Milestone 4 acceptance criteria (real crashes, exact damage)
+	./deploy/smoke-crash.sh
 
 test:
 	go vet ./...

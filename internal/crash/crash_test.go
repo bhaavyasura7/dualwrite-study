@@ -1,6 +1,9 @@
 package crash
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func arm(t *testing.T, after string) *int {
 	t.Helper()
@@ -65,4 +68,26 @@ func TestInvalidAfterNPanics(t *testing.T) {
 		}
 	}()
 	Point("here")
+}
+
+func TestStallFiresOnceOnNthHit(t *testing.T) {
+	t.Setenv("STALL_AT", "here")
+	t.Setenv("STALL_AFTER_N", "2")
+	t.Setenv("STALL_MS", "1500")
+	stallHits.Store(0)
+	var slept []time.Duration
+	original := sleep
+	sleep = func(d time.Duration) { slept = append(slept, d) }
+	t.Cleanup(func() { sleep = original })
+
+	Stall("elsewhere")
+	Stall("here")
+	if len(slept) != 0 {
+		t.Fatalf("stalled early: %v", slept)
+	}
+	Stall("here")
+	Stall("here")
+	if len(slept) != 1 || slept[0] != 1500*time.Millisecond {
+		t.Fatalf("slept = %v", slept)
+	}
 }

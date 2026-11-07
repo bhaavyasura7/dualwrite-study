@@ -1,5 +1,5 @@
 {
-  "comment": "Three copies are two duplicates. The third copy arrives after seq 2, so it is also out of order.",
+  "comment": "Three copies are two duplicates. The third copy arrives after seq 2, so it is a stale redelivery, not out of order.",
   "input": {
     "db": [{"order": "a", "seq": 1}, {"order": "a", "seq": 2}],
     "kafka": [
@@ -9,5 +9,5 @@
       {"order": "a", "seq": 1, "partition": 0, "offset": 3}
     ]
   },
-  "want": {"orders_total": 1, "events_total": 2, "duplicates": 2, "out_of_order": 1, "collateral_dup": 2}
+  "want": {"orders_total": 1, "events_total": 2, "duplicates": 2, "stale_redelivery": 1, "collateral_dup": 2}
 }

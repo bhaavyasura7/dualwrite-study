@@ -43,32 +43,35 @@ type Input struct {
 
 // Result holds the metrics of Section 11.2. Names match the results CSV.
 type Result struct {
-	OrdersTotal    int            `json:"orders_total"`
-	EventsTotal    int            `json:"events_total"`
-	Lost           int            `json:"lost"`
-	Ghost          int            `json:"ghost"`
-	Duplicates     int            `json:"duplicates"`
-	OutOfOrder     int            `json:"out_of_order"`
-	LostAfterSend  int            `json:"lost_after_send"`
-	HookedLost     int            `json:"hooked_lost"`
-	HookedDup      int            `json:"hooked_dup"`
-	HookedGhost    int            `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
-	CollateralLost int            `json:"collateral_lost"`
-	CollateralDup  int            `json:"collateral_dup"`
-	SendFailed     int            `json:"send_failed"`
-	BusinessDamage map[string]int `json:"business_damage,omitempty"`
-	WindowP50MS    float64        `json:"window_p50_ms"`
-	WindowP99MS    float64        `json:"window_p99_ms"`
-	WindowMaxMS    float64        `json:"window_max_ms"`
+	OrdersTotal int `json:"orders_total"`
+	EventsTotal int `json:"events_total"`
+	Lost        int `json:"lost"`
+	Ghost       int `json:"ghost"`
+	Duplicates  int `json:"duplicates"`
+	OutOfOrder  int `json:"out_of_order"`
+	// StaleRedelivery is a subset of Duplicates, not additive with it.
+	StaleRedelivery int            `json:"stale_redelivery"`
+	LostAfterSend   int            `json:"lost_after_send"`
+	HookedLost      int            `json:"hooked_lost"`
+	HookedDup       int            `json:"hooked_dup"`
+	HookedGhost     int            `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
+	CollateralLost  int            `json:"collateral_lost"`
+	CollateralDup   int            `json:"collateral_dup"`
+	SendFailed      int            `json:"send_failed"`
+	BusinessDamage  map[string]int `json:"business_damage,omitempty"`
+	WindowP50MS     float64        `json:"window_p50_ms"`
+	WindowP99MS     float64        `json:"window_p99_ms"`
+	WindowMaxMS     float64        `json:"window_max_ms"`
 }
 
 // Damage lists the exact pairs behind each metric, for root-cause analysis.
 type Damage struct {
-	Lost          []Pair `json:"lost"`
-	Ghost         []Pair `json:"ghost"`
-	Duplicates    []Pair `json:"duplicates"` // one entry per extra copy
-	OutOfOrder    []Pair `json:"out_of_order"`
-	LostAfterSend []Pair `json:"lost_after_send"`
+	Lost            []Pair `json:"lost"`
+	Ghost           []Pair `json:"ghost"`
+	Duplicates      []Pair `json:"duplicates"` // one entry per extra copy
+	OutOfOrder      []Pair `json:"out_of_order"`
+	StaleRedelivery []Pair `json:"stale_redelivery"`
+	LostAfterSend   []Pair `json:"lost_after_send"`
 }
 
 // Check computes the cycle's metrics. Input order does not matter.
@@ -125,12 +128,13 @@ func Check(in Input) (Result, Damage) {
 			}
 		}
 	}
-	damage.OutOfOrder = outOfOrder(in.Kafka)
+	damage.OutOfOrder, damage.StaleRedelivery = ordering(in.Kafka)
 
 	result.Lost = len(damage.Lost)
 	result.Ghost = len(damage.Ghost)
 	result.Duplicates = len(damage.Duplicates)
 	result.OutOfOrder = len(damage.OutOfOrder)
+	result.StaleRedelivery = len(damage.StaleRedelivery)
 	result.LostAfterSend = len(damage.LostAfterSend)
 
 	windows := make([]float64, 0, len(first))
@@ -153,22 +157,30 @@ func Check(in Input) (Result, Damage) {
 	return result, damage
 }
 
-// outOfOrder reports each record whose seq is below one already seen for its
-// order, walking every order in log order.
-func outOfOrder(records []Record) []Pair {
+// ordering walks every order in log order. A first delivery below the highest
+// seq seen is out of order. A repeat delivery below it is a stale redelivery: it
+// is already counted as a duplicate, but can regress a last-write-wins consumer.
+// Pairs stand in for event IDs because P5 has none; in P1–P4 they map one to one.
+func ordering(records []Record) (outOfOrder, stale []Pair) {
 	sorted := slices.Clone(records)
 	slices.SortFunc(sorted, func(a, b Record) int {
 		return cmp.Or(cmp.Compare(a.Partition, b.Partition), cmp.Compare(a.Offset, b.Offset))
 	})
-	var found []Pair
+	delivered := make(map[Pair]struct{}, len(sorted))
 	highest := make(map[string]int)
 	for _, r := range sorted {
+		_, repeat := delivered[r.Pair]
+		delivered[r.Pair] = struct{}{}
 		if r.Seq < highest[r.OrderID] {
-			found = append(found, r.Pair)
+			if repeat {
+				stale = append(stale, r.Pair)
+			} else {
+				outOfOrder = append(outOfOrder, r.Pair)
+			}
 		}
 		highest[r.OrderID] = max(highest[r.OrderID], r.Seq)
 	}
-	return found
+	return outOfOrder, stale
 }
 
 func toSet(pairs []Pair) map[Pair]struct{} {

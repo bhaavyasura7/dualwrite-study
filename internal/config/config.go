@@ -35,6 +35,7 @@ type Config struct {
 	// connection deadline. See docs/SPEC_NOTES.md.
 	KafkaRequestOverhead time.Duration // KAFKA_REQUEST_OVERHEAD_MS, default 1000
 	KafkaDeliveryTimeout time.Duration // KAFKA_DELIVERY_TIMEOUT_MS, default 5000
+	KafkaTraceAttempts   bool          // KAFKA_TRACE_ATTEMPTS, default false; logs every produce request
 }
 
 // Topic returns the cycle's Kafka topic.
@@ -59,6 +60,7 @@ func Load() (Config, error) {
 		KafkaRequestTimeout:  millis("KAFKA_REQUEST_TIMEOUT_MS", 3000, &errs),
 		KafkaRequestOverhead: millis("KAFKA_REQUEST_OVERHEAD_MS", 1000, &errs),
 		KafkaDeliveryTimeout: millis("KAFKA_DELIVERY_TIMEOUT_MS", 5000, &errs),
+		KafkaTraceAttempts:   boolean("KAFKA_TRACE_ATTEMPTS", false, &errs),
 	}
 	if cfg.CycleID == "" {
 		errs = append(errs, errors.New("CYCLE_ID is required"))
@@ -97,6 +99,7 @@ type LoadGen struct {
 	BurstAt        time.Duration // LOAD_BURST_AT_S, default 10
 	BurstLength    time.Duration // LOAD_BURST_S, default 10
 	RequestTimeout time.Duration // LOAD_REQUEST_TIMEOUT_MS, default 10000
+	LatencyFile    string        // LOAD_LATENCY_FILE, optional CSV of start_ms,latency_ms per request
 	Seed           uint64        // LOAD_SEED, default 1
 }
 
@@ -113,6 +116,7 @@ func LoadLoadGen() (LoadGen, error) {
 		BurstAt:        seconds("LOAD_BURST_AT_S", 10, &errs),
 		BurstLength:    seconds("LOAD_BURST_S", 10, &errs),
 		RequestTimeout: millis("LOAD_REQUEST_TIMEOUT_MS", 10000, &errs),
+		LatencyFile:    os.Getenv("LOAD_LATENCY_FILE"),
 		Seed:           uint64(integer("LOAD_SEED", 1, &errs)),
 	}
 	if cfg.Mode != "constant" && cfg.Mode != "burst" {

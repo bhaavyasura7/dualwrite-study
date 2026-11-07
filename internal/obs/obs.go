@@ -10,6 +10,9 @@ import (
 // Log markers the checker and runner search for.
 const (
 	CrashPointHit = "CRASH_POINT_HIT"
+	StallPointHit = "STALL_POINT_HIT"
+	StallPointEnd = "STALL_POINT_END"
+	ProduceTrace  = "PRODUCE_REQUEST"
 	SentCalled    = "SENT_CALLED"
 	SendAcked     = "SEND_ACKED"
 	SendFailed    = "SEND_FAILED"

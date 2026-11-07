@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 1.2 · November 2026"
+subtitle: "Go implementation · version 1.3 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -198,6 +198,7 @@ Every event, from every pattern, has the same JSON value. The checker relies on 
 ## 5.3 Topics
 
 - One **fresh topic per cycle**: `orders.<cycle_id>` (e.g. `orders.A-4_P3_r07`), 3 partitions, replication factor 1 (3 for broker tests).
+- Every cycle topic sets `message.timestamp.type=LogAppendTime`. The window metric needs the broker's clock; with the default `CreateTime`, a record delayed by retries keeps its early timestamp and the window is understated. The checker refuses any other topic.
 - Creating new topics avoids Kafka's slow, flaky topic deletion. Old topics are deleted in bulk at the end of a run.
 - For P4 the Outbox Event Router routes to the topic via a per-cycle `route.topic.replacement`; for P5, Debezium names topics `<prefix>.<schema>.<table>`, so a `RegexRouter` transform renames `.*\.public\.orders` to `orders.<cycle_id>` (Section 9.3).
 
@@ -458,7 +459,8 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 | lost | pairs in DB and not in K |
 | ghost | pairs in K and not in DB |
 | duplicates | sum over pairs of (count in K − 1) where count > 1 |
-| out_of_order | within each order (one partition), occurrences where a record's `seq` is lower than a previously seen `seq` for that order |
+| out_of_order | within each order (one partition), **first deliveries** whose `seq` is lower than a previously seen `seq` for that order. Repeat deliveries are excluded, so the damage types stay orthogonal |
+| stale_redelivery | repeat deliveries whose `seq` is lower than a previously seen `seq` for that order. A subset of duplicates, not additive with it. It measures downstream impact: a last-write-wins consumer regresses on such a record although nothing was reordered |
 | window (p50/p99/max) | broker timestamp of first occurrence − commit time of that version, `pg_xact_commit_timestamp(xmin)` of its `orders_history` row (not `now()`, which is the transaction start) |
 | recovery_s | time from fault end until no lost pairs remain (sampled every second during drain) |
 | lost_after_send | lost pairs whose event has a `SENT_CALLED` marker (producer-buffer loss) |
@@ -551,16 +553,16 @@ RESET → START → WARMUP → FAULT → RECOVER → DRAIN → CHECK → RECORD 
 
 Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one bad cycle never stops the run. A violated control `assert` marks `CONTROL_FAIL` and **does** stop the run. The runner is resumable: it skips cycles already present in `results.csv`.
 
-**Sharding.** `--shard i/n` runs only the cycles whose `hash(cycle_id) mod n = i-1`, so n laptops split the catalogue with no overlap, and each writes `results/results.<host>.csv`. All laptops must use the same git commit and image digests (checked at start and recorded in every row). Performance vectors (`group: perf`) are never sharded: they run on one designated machine.
+**Sharding.** `--shard i/n` runs only the vectors whose `hash(vector_id) mod n = i-1`, so n laptops split the catalogue with no overlap and every cycle of a vector runs on one machine, and each writes `results/results.<host>.csv`. All laptops must use the same git commit and image digests (checked at start and recorded in every row). Performance vectors (`group: perf`) are never sharded: they run on one designated machine.
 
-**Run-time budget.** At an assumed ~75 s of fixed overhead per cycle (reset, start, drain, check), the catalogue needs about 1,800 cycles / ~80 h for `must`, ~1,300 / ~50 h for `should`, and ~400 / ~20 h for `optional`. Measure the real overhead in Milestone 5 and re-plan. Correctness runs can be split across team laptops with identical pinned stacks; performance runs (P-1) stay on one machine.
+**Run-time budget.** At an assumed ~75 s of fixed overhead per cycle (reset, start, drain, check), the catalogue needs about 1,800 cycles / ~80 h for `must`, ~1,300 / ~50 h for `should`, and ~400 / ~20 h for `optional`. Measure the real overhead on 2–3 vectors in Milestone 5 and re-plan before committing to the full run, including whether C0-1 needs its full five hours. Correctness runs can be split across team laptops with identical pinned stacks; performance runs (P-1) stay on one machine.
 
 ## 14.3 Results CSV (one row per cycle)
 
 ```
 run_id, cycle_id, vector_id, pattern, mode, fault, crash_point, repeat, seed,
 status, sweep_json, versions_json, load_rate, orders_total, events_total,
-lost, ghost, duplicates, out_of_order, lost_after_send,
+lost, ghost, duplicates, out_of_order, stale_redelivery, lost_after_send,
 hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
 wal_retained_bytes_max, send_failed, host, shard, git_commit,
@@ -639,7 +641,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 and 1.2
+# 20. Changes in versions 1.1 to 1.3
 
 | # | Area | Change |
 |---|---|---|
@@ -667,3 +669,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 22 | 9.3 | (1.2) P4/P5 connector uses the `pg-connect` port 15433 |
 | 23 | 14.2, 14.4, 18 | (1.2) Sharding across laptops, `make merge`, Milestone 9 reworded |
 | 24 | 14.3 | (1.2) CSV columns `send_failed`, `host`, `shard` |
+| 25 | 5.3 | (1.3) Cycle topics use `LogAppendTime`; the checker refuses others |
+| 26 | 11.2, 14.3 | (1.3) `out_of_order` counts first deliveries only; new metric and CSV column `stale_redelivery` |
+| 27 | 14.2 | (1.3) Sharding by vector, not by cycle |
+| 28 | 14.2 | (1.3) Re-plan from measured overhead on 2–3 vectors before the full run |
