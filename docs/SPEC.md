@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 2.0 · November 2026"
+subtitle: "Go implementation · version 2.1 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -419,6 +419,8 @@ Worker settings only take effect when Kafka Connect is recreated, so the runner 
 
 `poll.interval.ms` is set explicitly from `DEBEZIUM_POLL_INTERVAL_MS` (default 500) and recorded in `env_json`.
 
+`retriable.restart.connector.wait.ms` stays at Debezium's default of 10,000 ms, set from `DEBEZIUM_RETRY_WAIT_MS` and recorded in `env_json`. When a task enters this wait, deleting the connector takes about 10 s, which extends the failover loss window. Every report of CDC recovery times must state this setting.
+
 The templates in `deploy/connect/` also set what the study needs but this listing omits: `publication.autocreate.mode=disabled`, `snapshot.mode=no_data` (the cycle's tables are empty, and Debezium 3 replaced `never` with `no_data`), and converters. P4 uses `StringConverter` so the payload reaches Kafka as the common event schema. P5 uses `JsonConverter` without schemas and `decimal.handling.mode=double`.
 
 P5 uses the same base with `table.include.list = public.orders`, `topic.prefix = cdc{{cycle_slug}}`, and a `RegexRouter` instead of the outbox transform:
@@ -476,6 +478,7 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 | window (p50/p99/max) | broker timestamp of first occurrence − commit time of that version, `pg_xact_commit_timestamp(xmin)` of its `orders_history` row (not `now()`, which is the transaction start) |
 | recovery_s | time from fault end until no lost pairs remain (sampled every second during drain) |
 | lost_after_send | lost pairs whose event has a `SENT_CALLED` marker (producer-buffer loss) |
+| lost_after_ack | lost pairs whose event has a `SEND_ACKED` marker: acknowledged by the broker, then lost. Measured for P1–P3; empty for P4 and P5, which publish through Connect and log no delivery markers |
 | business_damage_<strategy> | absolute difference between rows in that strategy's payment table and orders whose final status is PAID |
 | hooked_lost / hooked_dup | damage to the event(s) named in `CRASH_POINT_HIT` |
 | collateral_lost / collateral_dup | the same metrics for every other event |
@@ -586,7 +589,7 @@ Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one b
 ```
 run_id, cycle_id, vector_id, pattern, mode, fault, crash_point, repeat, seed,
 status, sweep_json, env_json, versions_json, load_rate, orders_total, events_total,
-lost, ghost, duplicates, out_of_order, stale_redelivery, lost_after_send,
+lost, ghost, duplicates, out_of_order, stale_redelivery, lost_after_send, lost_after_ack,
 hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
 wal_retained_bytes_max, outbox_backlog_max, relay_batches, batch_rows_mean, batch_rows_max,
@@ -617,6 +620,8 @@ make report                # run analysis scripts → figures/
 
 **Analysis:** Python scripts in `analysis/` read `results.csv` and produce, at minimum:
 damage by pattern × fault (bars with 95% confidence intervals), a pattern × fault heatmap, knob sweeps (lines), exactly-once on/off and consumer-strategy comparisons, and inconsistency-window distributions.
+
+**Loss distributions, fixed before the final runs.** For every loss metric, the analysis reports the percentage of cycles with any loss, the median, p90, maximum and a histogram, not just the mean. The same outage can lose nothing or lose everything in flight (finding F24), so a mean alone would mislead.
 
 **Analysis rule, fixed before the final runs.** Every result is reported twice: over all cycles, and excluding cycles with a `pre_flag`. "All cycles" is the primary number. Flagged cycles are never dropped from the data. The rule is set in advance because deciding after seeing the data would bias the results.
 
@@ -652,6 +657,8 @@ damage by pattern × fault (bars with 95% confidence intervals), a pattern × fa
 
 A run is only valid if all three levels pass on the same commit. Record the git commit hash in `run_id`.
 
+Milestones are committed through `deploy/commit-milestone.sh`, which runs `make accept` (tests, lint and every smoke test) and refuses to commit on any failure.
+
 # 18. Build order and acceptance criteria
 
 | # | Milestone | Done when |
@@ -674,7 +681,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 2.0
+# 20. Changes in versions 1.1 to 2.1
 
 | # | Area | Change |
 |---|---|---|
@@ -728,3 +735,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 48 | 16 | (2.0) Separate volumes, Connect topics and replication factors per topology |
 | 49 | 12, 16 | (2.0) Separate `toxiproxy-pg` instance, restarted at failover |
 | 50 | 14.2, 14.3 | (2.0) `INVALID_NO_LOAD` and `load_failed` |
+| 51 | 11.2, 14.1, 14.3 | (2.1) `lost_after_ack`, and C-4's expectation rewritten around it |
+| 52 | 9.3 | (2.1) Debezium retry wait recorded and reported with recovery times |
+| 53 | 15 | (2.1) Loss metrics reported as distributions |
+| 54 | 17 | (2.1) `make accept` and a commit script that refuses to commit on failure |

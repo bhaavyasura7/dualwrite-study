@@ -20,6 +20,7 @@ const (
 	RetryScheduled = "RETRY_SCHEDULED"
 	RetryExhausted = "RETRY_EXHAUSTED"
 	RelayBatch     = "RELAY_BATCH"
+	Consumed       = "CONSUMED"
 )
 
 // Setup installs the JSON logger with the fields required on every line.

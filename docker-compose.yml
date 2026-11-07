@@ -228,6 +228,14 @@ services:
         CMD: relay
     image: dualwrite/relay:dev
 
+  consumer:
+    profiles: [app]
+    build:
+      context: .
+      args:
+        CMD: consumer
+    image: dualwrite/consumer:dev
+
 networks:
   failover:
 

@@ -49,6 +49,10 @@ type Config struct {
 	// RelayDBTimeout bounds each relay database call. It matches HandlerTimeout, so
 	// the relay and the order service react alike to a dead database.
 	RelayDBTimeout time.Duration // RELAY_DB_TIMEOUT_MS, default 5000
+
+	ConsumerStrategy string        // CONSUMER_STRATEGY, naive, dedup or upsert
+	ConsumerOrder    string        // CONSUMER_COMMIT_ORDER, effect_first or offset_first
+	ConsumerSession  time.Duration // CONSUMER_SESSION_TIMEOUT_MS, default 10000
 }
 
 // Topic returns the cycle's Kafka topic.
@@ -82,6 +86,9 @@ func Load() (Config, error) {
 		RelayBatchSize:       integer("RELAY_BATCH_SIZE", 100, &errs),
 		RelayPollInterval:    millis("RELAY_POLL_INTERVAL_MS", 500, &errs),
 		RelayDBTimeout:       millis("RELAY_DB_TIMEOUT_MS", 5000, &errs),
+		ConsumerStrategy:     os.Getenv("CONSUMER_STRATEGY"),
+		ConsumerOrder:        str("CONSUMER_COMMIT_ORDER", "effect_first"),
+		ConsumerSession:      millis("CONSUMER_SESSION_TIMEOUT_MS", 10000, &errs),
 	}
 	if cfg.CycleID == "" {
 		errs = append(errs, errors.New("CYCLE_ID is required"))

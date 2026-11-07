@@ -115,7 +115,7 @@ func (r *Runner) playFault(ctx context.Context, run *cycleRun, spec Fault, fault
 	if spec.OnLog != "" {
 		wait, cancel := context.WithTimeout(ctx, faultTimeout)
 		defer cancel()
-		if err := r.docker.WaitForLog(wait, pointTarget(run.cycle), spec.OnLog); err != nil {
+		if err := r.docker.WaitForLog(wait, pointTargets(run)[0], spec.OnLog); err != nil {
 			return fmt.Errorf("%s never saw %s: %w", fault.Name(), spec.OnLog, err)
 		}
 	} else if err := sleep(ctx, time.Until(at)); err != nil {
@@ -131,32 +131,37 @@ func (r *Runner) playFault(ctx context.Context, run *cycleRun, spec Fault, fault
 	return errors.Join(injectErr, fault.Recover(restore))
 }
 
-// awaitPoint arms the point now that warm-up is over and waits for it to fire.
+// awaitPoint arms the point now that warm-up is over and waits for it to fire in
+// every target.
 func (r *Runner) awaitPoint(ctx context.Context, run *cycleRun, latest time.Duration, markCrashed func(...string)) error {
-	target := pointTarget(run.cycle)
 	wait, cancel := context.WithTimeout(ctx, latest+faultTimeout)
 	defer cancel()
-	if err := r.docker.Signal(wait, target, "SIGUSR1"); err != nil {
-		return failed("FAULT", err)
-	}
-	if run.cycle.Stall != nil {
-		if err := r.docker.WaitForLog(wait, target, obs.StallPointEnd); err != nil {
-			return &failure{"INVALID_NO_STALL", err}
+	targets := pointTargets(run)
+	for _, target := range targets {
+		if err := r.docker.Signal(wait, target, "SIGUSR1"); err != nil {
+			return failed("FAULT", err)
 		}
-		return nil
 	}
-	if err := r.docker.WaitForLog(wait, target, obs.CrashPointHit); err != nil {
-		_ = r.captureLogs(context.WithoutCancel(ctx), run, target)
-		return &failure{"INVALID_NO_CRASH", err}
+	for _, target := range targets {
+		if run.cycle.Stall != nil {
+			if err := r.docker.WaitForLog(wait, target, obs.StallPointEnd); err != nil {
+				return &failure{"INVALID_NO_STALL", err}
+			}
+			continue
+		}
+		if err := r.docker.WaitForLog(wait, target, obs.CrashPointHit); err != nil {
+			_ = r.captureLogs(context.WithoutCancel(ctx), run, target)
+			return &failure{"INVALID_NO_CRASH", err}
+		}
+		code, err := r.docker.WaitForExit(wait, target)
+		if err != nil {
+			return failed("RECOVER", err)
+		}
+		if code != 137 {
+			return failed("RECOVER", fmt.Errorf("%s: exit code %d, want 137 (SIGKILL)", target, code))
+		}
+		markCrashed(target)
 	}
-	code, err := r.docker.WaitForExit(wait, target)
-	if err != nil {
-		return failed("RECOVER", err)
-	}
-	if code != 137 {
-		return failed("RECOVER", fmt.Errorf("exit code %d, want 137 (SIGKILL)", code))
-	}
-	markCrashed(target)
 	return nil
 }
 
@@ -247,10 +252,16 @@ func wrap(err error, build func() faults.Fault) (faults.Fault, error) {
 
 // containers resolves a catalogue target to container names.
 func containers(run *cycleRun, target string, rng *rand.Rand) ([]string, error) {
-	var relays []string
+	var relays, consumers, firstMembers []string
 	for _, component := range run.components {
-		if strings.HasPrefix(component.Name, relayName) {
+		switch {
+		case strings.HasPrefix(component.Name, relayName):
 			relays = append(relays, component.Name)
+		case strings.HasPrefix(component.Name, consumerName):
+			consumers = append(consumers, component.Name)
+			if strings.HasSuffix(component.Name, "-1") {
+				firstMembers = append(firstMembers, component.Name)
+			}
 		}
 	}
 	switch target {
@@ -265,6 +276,10 @@ func containers(run *cycleRun, target string, rng *rand.Rand) ([]string, error) 
 			return nil, errors.New("no relays in this cycle")
 		}
 		return []string{relays[rng.IntN(len(relays))]}, nil
+	case "consumers":
+		return consumers, nil
+	case "consumers-member-1":
+		return firstMembers, nil
 	case "connect":
 		return []string{connectContainer}, nil
 	case "kafka":

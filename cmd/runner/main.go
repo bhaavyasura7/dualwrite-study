@@ -132,7 +132,7 @@ func run() error {
 	}
 
 	// The service image must match the commit recorded in every row.
-	build := exec.Command("docker", "compose", "--profile", "app", "build", "orderservice", "relay")
+	build := exec.Command("docker", "compose", "--profile", "app", "build", "orderservice", "relay", "consumer")
 	if output, err := build.CombinedOutput(); err != nil {
 		return fmt.Errorf("build image: %w: %s", err, output)
 	}
@@ -151,7 +151,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	versions, err := docker.Versions(ctx, runner.BaseContainers, []string{"dualwrite/orderservice:dev", "dualwrite/relay:dev"})
+	versions, err := docker.Versions(ctx, runner.BaseContainers, []string{"dualwrite/orderservice:dev", "dualwrite/relay:dev", "dualwrite/consumer:dev"})
 	if err != nil {
 		return err
 	}

@@ -43,7 +43,8 @@ func (d *Docker) Close() error { return d.cli.Close() }
 type Spec struct {
 	Name, Image string
 	Env         map[string]string
-	Port        string // published on the same host port; empty for none
+	Extra       map[string]string // settings only this component gets
+	Port        string            // published on the same host port; empty for none
 	MemoryBytes int64
 }
 

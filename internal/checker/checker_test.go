@@ -162,6 +162,26 @@ func TestLostDetailMarksIntermediateVersions(t *testing.T) {
 	}
 }
 
+func TestLostAfterAck(t *testing.T) {
+	logs := `{"msg":"SENT_CALLED","event_id":"e1","order_id":"a","seq":1}
+{"msg":"SENT_CALLED","event_id":"e2","order_id":"b","seq":1}
+{"msg":"SEND_ACKED","event_id":"e1"}
+{"msg":"SEND_FAILED","event_id":"e2"}
+`
+	evidence, err := ParseLogs(strings.NewReader(logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Check(Input{
+		DB:    []Version{{Pair: Pair{"a", 1}}, {Pair: Pair{"b", 1}}},
+		Sent:  evidence.Sent,
+		Acked: evidence.Acked,
+	})
+	if got.Lost != 2 || got.LostAfterSend != 2 || got.LostAfterAck != 1 {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestRecoveryS(t *testing.T) {
 	end := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
 	in := Input{

@@ -157,6 +157,7 @@ func ReadKafka(ctx context.Context, brokers []string, topic string) ([]Record, e
 // Evidence is what the cycle's logs contribute to the check.
 type Evidence struct {
 	Sent            []Pair
+	Acked           []Pair
 	Hooked          []Pair
 	SendFailed      int
 	InflightAtCrash int     // records sent but not yet resolved at the crash marker
@@ -169,6 +170,7 @@ type Evidence struct {
 func ParseLogs(r io.Reader) (Evidence, error) {
 	var evidence Evidence
 	pending := make(map[string]time.Time)
+	pairs := make(map[string]Pair) // event ID to pair; SEND_ACKED names only the event
 	crashed := false
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -194,8 +196,12 @@ func ParseLogs(r io.Reader) (Evidence, error) {
 		case obs.SentCalled:
 			evidence.Sent = append(evidence.Sent, pair)
 			pending[line.EventID] = line.Time
+			pairs[line.EventID] = pair
 		case obs.SendAcked:
 			delete(pending, line.EventID)
+			if acked, ok := pairs[line.EventID]; ok {
+				evidence.Acked = append(evidence.Acked, acked)
+			}
 		case obs.RelayBatch:
 			if line.Phase == "read" {
 				evidence.BatchRows = append(evidence.BatchRows, line.N)
@@ -251,7 +257,7 @@ func Collect(ctx context.Context, dsn string, brokers []string, topic string, lo
 		if err != nil {
 			return Input{}, err
 		}
-		in.Sent, in.Hooked, in.SendFailed = evidence.Sent, evidence.Hooked, evidence.SendFailed
+		in.Sent, in.Acked, in.Hooked, in.SendFailed = evidence.Sent, evidence.Acked, evidence.Hooked, evidence.SendFailed
 		in.InflightAtCrash, in.OldestPendingMS = evidence.InflightAtCrash, evidence.OldestPendingMS
 		in.BatchRows = evidence.BatchRows
 	}

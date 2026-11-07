@@ -75,3 +75,18 @@ func TestDecodeDebeziumEnvelope(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestKeyAndPayment(t *testing.T) {
+	order := uuid.MustParse("6f1c7a3e-0f3b-4f7e-9a53-0c8f2f1f2f10")
+	ev, err := New(order, 2, StatusPaid, 1, "P3", "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev.Key() != ev.EventID.String() || !ev.IsPayment() {
+		t.Fatalf("got %s, %v", ev.Key(), ev.IsPayment())
+	}
+	p5 := Event{OrderID: order, Seq: 2, Status: StatusPlaced}
+	if p5.Key() != order.String()+":2" || p5.IsPayment() {
+		t.Fatalf("got %s, %v", p5.Key(), p5.IsPayment())
+	}
+}

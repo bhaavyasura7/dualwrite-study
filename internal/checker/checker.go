@@ -35,6 +35,7 @@ type Input struct {
 	DB              []Version      `json:"db"`
 	Kafka           []Record       `json:"kafka"`
 	Sent            []Pair         `json:"sent"`        // SENT_CALLED markers
+	Acked           []Pair         `json:"acked"`       // pairs with a SEND_ACKED marker
 	Hooked          []Pair         `json:"hooked"`      // events named by CRASH_POINT_HIT
 	SendFailed      int            `json:"send_failed"` // SEND_FAILED markers
 	InflightAtCrash int            `json:"inflight_at_crash"`
@@ -55,12 +56,14 @@ type Result struct {
 	// StaleRedelivery is a subset of Duplicates, not additive with it.
 	StaleRedelivery int `json:"stale_redelivery"`
 	LostAfterSend   int `json:"lost_after_send"`
-	HookedLost      int `json:"hooked_lost"`
-	HookedDup       int `json:"hooked_dup"`
-	HookedGhost     int `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
-	CollateralLost  int `json:"collateral_lost"`
-	CollateralDup   int `json:"collateral_dup"`
-	SendFailed      int `json:"send_failed"`
+	// LostAfterAck counts events the broker acknowledged and then lost.
+	LostAfterAck   int `json:"lost_after_ack"`
+	HookedLost     int `json:"hooked_lost"`
+	HookedDup      int `json:"hooked_dup"`
+	HookedGhost    int `json:"hooked_ghost"` // for assert_scope: hooked; not a CSV column
+	CollateralLost int `json:"collateral_lost"`
+	CollateralDup  int `json:"collateral_dup"`
+	SendFailed     int `json:"send_failed"`
 	// In-flight state at the crash, so collateral loss can be reported against it.
 	InflightAtCrash int     `json:"inflight_at_crash"`
 	OldestPendingMS float64 `json:"oldest_pending_ms"`
@@ -83,6 +86,7 @@ type Damage struct {
 	OutOfOrder      []Pair      `json:"out_of_order"`
 	StaleRedelivery []Pair      `json:"stale_redelivery"`
 	LostAfterSend   []Pair      `json:"lost_after_send"`
+	LostAfterAck    []Pair      `json:"lost_after_ack"`
 }
 
 // LostEvent explains one lost pair.
@@ -130,6 +134,7 @@ func Check(in Input) (Result, Damage) {
 		}
 	}
 	sent := toSet(in.Sent)
+	acked := toSet(in.Acked)
 	hooked := toSet(in.Hooked)
 
 	for _, pair := range sortedKeys(committed) {
@@ -146,6 +151,9 @@ func Check(in Input) (Result, Damage) {
 		}
 		if _, ok := sent[pair]; ok {
 			damage.LostAfterSend = append(damage.LostAfterSend, pair)
+		}
+		if _, ok := acked[pair]; ok {
+			damage.LostAfterAck = append(damage.LostAfterAck, pair)
 		}
 	}
 	for _, pair := range sortedKeys(copies) {
@@ -172,6 +180,7 @@ func Check(in Input) (Result, Damage) {
 	result.OutOfOrder = len(damage.OutOfOrder)
 	result.StaleRedelivery = len(damage.StaleRedelivery)
 	result.LostAfterSend = len(damage.LostAfterSend)
+	result.LostAfterAck = len(damage.LostAfterAck)
 
 	windows := make([]float64, 0, len(first))
 	for pair, seen := range first {

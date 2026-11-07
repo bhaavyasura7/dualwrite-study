@@ -137,3 +137,54 @@ func MarkSent(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) error {
 	}
 	return nil
 }
+
+// PayNaive records a payment for every event it sees.
+func (s *Store) PayNaive(ctx context.Context, ev events.Event) (bool, error) {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO consumer.payments_naive (order_id, event_key, amount) VALUES ($1, $2, $3)`,
+		ev.OrderID, ev.Key(), ev.Amount)
+	if err != nil {
+		return false, fmt.Errorf("insert payment: %w", err)
+	}
+	return true, nil
+}
+
+// PayDedup records a payment once per event key, in one transaction.
+func (s *Store) PayDedup(ctx context.Context, ev events.Event) (bool, error) {
+	tx, err := s.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op once committed
+
+	tag, err := tx.Exec(ctx,
+		`INSERT INTO consumer.processed_events (event_key) VALUES ($1) ON CONFLICT DO NOTHING`, ev.Key())
+	if err != nil {
+		return false, fmt.Errorf("insert processed event: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO consumer.payments_dedup (order_id, event_key, amount) VALUES ($1, $2, $3)`,
+		ev.OrderID, ev.Key(), ev.Amount)
+	if err != nil {
+		return false, fmt.Errorf("insert payment: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
+}
+
+// PayUpsert records at most one payment per order.
+func (s *Store) PayUpsert(ctx context.Context, ev events.Event) (bool, error) {
+	tag, err := s.pool.Exec(ctx,
+		`INSERT INTO consumer.payments_upsert (order_id, event_key, amount) VALUES ($1, $2, $3)
+		 ON CONFLICT (order_id) DO NOTHING`,
+		ev.OrderID, ev.Key(), ev.Amount)
+	if err != nil {
+		return false, fmt.Errorf("upsert payment: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}

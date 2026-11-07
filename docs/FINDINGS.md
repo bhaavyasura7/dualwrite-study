@@ -231,6 +231,26 @@ So P1's loss under a cut is not a fixed function of outage length. The likely ca
 
 Evidence: `experiments/trials/2026-11-07/smoke-checker-intermittent/`, F1.
 
+## F25. Consumer strategies decide whether upstream duplicates become business damage (Trial)
+
+Business damage (payments against paid orders), naive / dedup / upsert:
+
+| Cycle | Upstream duplicates | Naive | Dedup | Upsert |
+|---|---|---|---|---|
+| No faults, P1–P5, 60 s | 0 | 0 | 0 | 0 |
+| G-1 on P3 (3 cycles) | 0 | 1 | 0 | 0 |
+| G-2 on P3 (2 cycles) | 0 | 1 | 1 | 1 |
+| G-3 on P3 | 4 | 3 | 0 | 0 |
+| G-3 on P4 | 3,697 | 1,206 | 0 | 0 |
+| G-3 on P5 | 5,632 | 1,896 | 0 | 0 |
+| G-4 on P3 | 0 | 0 | 0 | 0 |
+
+G-1 and G-2 match their hypotheses, including that committing the offset first defeats dedup. G-3's P4 and P5 cycles ran at the default 60 s flush, so a Connect crash replays heavily.
+
+G-4 showed no naive duplicates in its single cycle, against its hypothesis. Consumers commit after every record, so at most one uncommitted event exists when a member pauses, which may make the effect rare. Needs the full run.
+
+Evidence: `experiments/trials/2026-11-07/m8-consumers/`.
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.

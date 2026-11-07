@@ -18,7 +18,7 @@ import (
 var columns = []string{
 	"run_id", "cycle_id", "vector_id", "pattern", "mode", "fault", "crash_point", "repeat", "seed",
 	"status", "sweep_json", "env_json", "versions_json", "load_rate", "orders_total", "events_total",
-	"lost", "ghost", "duplicates", "out_of_order", "stale_redelivery", "lost_after_send",
+	"lost", "ghost", "duplicates", "out_of_order", "stale_redelivery", "lost_after_send", "lost_after_ack",
 	"hooked_lost", "hooked_dup", "collateral_lost", "collateral_dup",
 	"business_damage_naive", "business_damage_dedup", "business_damage_upsert",
 	"wal_retained_bytes_max", "outbox_backlog_max", "relay_batches", "batch_rows_mean", "batch_rows_max",
@@ -69,6 +69,11 @@ func (r Row) record() []string {
 	if !r.FailoverAt.IsZero() {
 		failoverAt = r.FailoverAt.UTC().Format(time.RFC3339Nano)
 	}
+	// P4 and P5 publish through Connect, which logs no delivery markers.
+	lostAfterAck := ""
+	if !isCDC(r.Pattern) {
+		lostAfterAck = count(r.Result.LostAfterAck)
+	}
 	backlog := ""
 	if r.Pattern == "P3" {
 		backlog = strconv.FormatInt(r.OutboxBacklogMax, 10)
@@ -78,7 +83,7 @@ func (r Row) record() []string {
 		r.RunID, r.CycleID, r.VectorID, r.Pattern, r.Mode, r.Fault, r.CrashPoint, count(r.Repeat),
 		strconv.FormatUint(r.Seed, 10),
 		r.Status, r.SweepJSON, r.EnvJSON, r.VersionsJSON, count(r.LoadRate), count(res.OrdersTotal), count(res.EventsTotal),
-		count(res.Lost), count(res.Ghost), count(res.Duplicates), count(res.OutOfOrder), count(res.StaleRedelivery), count(res.LostAfterSend),
+		count(res.Lost), count(res.Ghost), count(res.Duplicates), count(res.OutOfOrder), count(res.StaleRedelivery), count(res.LostAfterSend), lostAfterAck,
 		count(res.HookedLost), count(res.HookedDup), count(res.CollateralLost), count(res.CollateralDup),
 		damage("naive"), damage("dedup"), damage("upsert"),
 		wal, backlog, count(res.RelayBatches), number(res.BatchRowsMean), count(res.BatchRowsMax),

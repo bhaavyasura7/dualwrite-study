@@ -1,0 +1,18 @@
+time=2026-11-07T13:45:36.323+05:30 level=INFO msg="run started" cycles=14 commit=7b043f4cbae9-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/m8a.csv
+time=2026-11-07T13:46:58.490+05:30 level=INFO msg="cycle finished" cycle=C0-1_P1_r01 n=1 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=82.158272625 load_s=70.3446855
+time=2026-11-07T13:48:20.665+05:30 level=INFO msg="cycle finished" cycle=C0-1_P2_r01 n=2 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=82.167845083 load_s=70.502356083
+time=2026-11-07T13:49:43.389+05:30 level=INFO msg="cycle finished" cycle=C0-1_P3_r01 n=3 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=82.717469667 load_s=70.464905667
+time=2026-11-07T13:51:08.548+05:30 level=INFO msg="cycle finished" cycle=C0-1_P4_r01 n=4 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=85.15146425 load_s=70.392054042
+time=2026-11-07T13:52:32.045+05:30 level=INFO msg="cycle finished" cycle=C0-1_P5_r01 n=5 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=83.483468584 load_s=70.433391041
+time=2026-11-07T13:53:16.731+05:30 level=INFO msg="cycle finished" cycle=G-1_P3_r01 n=6 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=44.675638625 load_s=32.144785583
+time=2026-11-07T13:54:00.629+05:30 level=INFO msg="cycle finished" cycle=G-1_P3_r02 n=7 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=43.889962666 load_s=31.831160458
+time=2026-11-07T13:54:44.797+05:30 level=INFO msg="cycle finished" cycle=G-1_P3_r03 n=8 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=44.157810709 load_s=32.068780583
+time=2026-11-07T13:55:28.916+05:30 level=INFO msg="cycle finished" cycle=G-2_P3_r01 n=9 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=44.109990875 load_s=32.104965583
+time=2026-11-07T13:56:12.901+05:30 level=INFO msg="cycle finished" cycle=G-2_P3_r02 n=10 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=43.9770255 load_s=31.854438333
+time=2026-11-07T13:56:58.129+05:30 level=INFO msg="cycle finished" cycle=G-3_P3_r01 n=11 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=45.195261875 load_s=33.288163416
+time=2026-11-07T13:57:20.527+05:30 level=INFO msg="fault injected" cycle=G-3_P4_r01 fault=crash target=connect
+time=2026-11-07T13:57:54.211+05:30 level=INFO msg="cycle finished" cycle=G-3_P4_r01 n=12 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=56.044528417 load_s=42.309606458
+time=2026-11-07T13:58:27.100+05:30 level=INFO msg="fault injected" cycle=G-3_P5_r01 fault=crash target=connect
+time=2026-11-07T13:59:00.492+05:30 level=INFO msg="cycle finished" cycle=G-3_P5_r01 n=13 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=66.234271875 load_s=52.745502542
+time=2026-11-07T13:59:28.583+05:30 level=INFO msg="fault injected" cycle=G-4_P3_r01 fault=pause target=consumers-member-1
+time=2026-11-07T14:00:16.099+05:30 level=INFO msg="cycle finished" cycle=G-4_P3_r01 n=14 of=14 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=75.5904355 load_s=62.012957792

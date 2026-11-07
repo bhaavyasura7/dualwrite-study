@@ -60,6 +60,17 @@ func typeOf(status string) (string, error) {
 	return "", fmt.Errorf("unknown order status %q", status)
 }
 
+// Key identifies the event for deduplication. P5 has no event ID (SPEC 10).
+func (e Event) Key() string {
+	if e.EventID == uuid.Nil {
+		return fmt.Sprintf("%s:%d", e.OrderID, e.Seq)
+	}
+	return e.EventID.String()
+}
+
+// IsPayment reports whether the event triggers a payment.
+func (e Event) IsPayment() bool { return e.Status == StatusPaid }
+
 // Decode parses a Kafka record value: the common schema for P1–P4, or a Debezium
 // row-change envelope for P5, mapped from `after`. A value missing its identity
 // is an error, so a malformed record can never pass as damage-free.

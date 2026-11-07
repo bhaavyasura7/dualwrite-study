@@ -37,7 +37,10 @@ const (
 	relayName        = "dualwrite-run-relay-"
 	serviceImage     = "dualwrite/orderservice:dev"
 	relayImage       = "dualwrite/relay:dev"
+	consumerName     = "dualwrite-run-consumer-"
+	consumerImage    = "dualwrite/consumer:dev"
 	maxRelays        = 4
+	maxMembers       = 2
 	servicePort      = "8080"
 	primary          = "dualwrite-postgres-primary-1"
 	replica          = "dualwrite-postgres-replica-1"
@@ -138,12 +141,10 @@ func (r *Runner) connectAdmin(brokers int) error {
 // front stops a vector from running with parts of it silently missing.
 func Supported(c Cycle) error {
 	switch {
-	case c.Crash != nil && c.Crash.Component != "orderservice" && c.Crash.Component != "relay":
+	case c.Crash != nil && !slices.Contains([]string{"orderservice", "relay", "consumers"}, c.Crash.Component):
 		return fmt.Errorf("crash component %s is not built yet", c.Crash.Component)
 	case c.Crash != nil && c.Crash.Component == "relay" && c.Topology.Relays != 1:
 		return errors.New("crash points on several relays are not built yet")
-	case len(c.Topology.Consumers) > 0:
-		return errors.New("consumers are not built yet")
 	case c.Crash == nil && c.Stall == nil && len(c.Faults) == 0 && c.Load.DurationS == 0:
 		return errors.New("cycle has no fault and no load duration")
 	}
@@ -392,6 +393,16 @@ func (r *Runner) prepare(run *cycleRun, seed uint64) error {
 			run.components = append(run.components, Spec{Name: relayName + strconv.Itoa(i), Image: relayImage, MemoryBytes: goMemory})
 		}
 	}
+	for _, strategy := range cycle.Topology.Consumers {
+		for member := 1; member <= cycle.Topology.ConsumersPerGroup; member++ {
+			run.components = append(run.components, Spec{
+				Name:        fmt.Sprintf("%s%s-%d", consumerName, strategy, member),
+				Image:       consumerImage,
+				Extra:       map[string]string{"CONSUMER_STRATEGY": strategy},
+				MemoryBytes: goMemory,
+			})
+		}
+	}
 	point := cycle.Crash
 	if point == nil {
 		point = cycle.Stall
@@ -421,16 +432,27 @@ func (r *Runner) prepare(run *cycleRun, seed uint64) error {
 	return nil
 }
 
-// pointTarget names the container a crash or stall point runs in.
-func pointTarget(c Cycle) string {
-	point := c.Crash
+// pointTargets names the containers a crash or stall point runs in.
+func pointTargets(run *cycleRun) []string {
+	point := run.cycle.Crash
 	if point == nil {
-		point = c.Stall
+		point = run.cycle.Stall
 	}
-	if point != nil && point.Component == "relay" {
-		return relayName + "1"
+	switch {
+	case point == nil:
+		return nil
+	case point.Component == "relay":
+		return []string{relayName + "1"}
+	case point.Component == "consumers":
+		var names []string
+		for _, component := range run.components {
+			if strings.HasPrefix(component.Name, consumerName) {
+				names = append(names, component.Name)
+			}
+		}
+		return names
 	}
-	return orderService
+	return []string{orderService}
 }
 
 // startAll creates the connector first, so its slot exists before any change.
@@ -444,7 +466,7 @@ func (r *Runner) startAll(ctx context.Context, run *cycleRun) error {
 	}
 	for _, component := range run.components {
 		env := maps.Clone(run.env)
-		if component.Name == pointTarget(run.cycle) {
+		if slices.Contains(pointTargets(run), component.Name) {
 			maps.Copy(env, run.pointEnv)
 		}
 		if err := r.startComponent(ctx, component, env); err != nil {
@@ -455,7 +477,8 @@ func (r *Runner) startAll(ctx context.Context, run *cycleRun) error {
 }
 
 func (r *Runner) startComponent(ctx context.Context, component Spec, env map[string]string) error {
-	component.Env = env
+	component.Env = maps.Clone(env)
+	maps.Copy(component.Env, component.Extra)
 	if err := r.docker.Recreate(ctx, component); err != nil {
 		return err
 	}
@@ -522,6 +545,11 @@ func (r *Runner) removeComponents(ctx context.Context) error {
 	names := []string{orderService}
 	for i := 1; i <= maxRelays; i++ {
 		names = append(names, relayName+strconv.Itoa(i))
+	}
+	for _, strategy := range []string{"naive", "dedup", "upsert"} {
+		for member := 1; member <= maxMembers; member++ {
+			names = append(names, fmt.Sprintf("%s%s-%d", consumerName, strategy, member))
+		}
 	}
 	for _, name := range names {
 		if err := r.docker.Remove(ctx, name); err != nil {
@@ -642,7 +670,7 @@ func (r *Runner) drain(ctx context.Context, run *cycleRun) error {
 
 	quiet := time.Duration(cycle.Drain.QuietS) * time.Second
 	topic := "orders." + cycle.ID
-	var last [2]int64
+	var last [3]int64
 	last[0] = -1
 	since := time.Now()
 	for {
@@ -650,12 +678,21 @@ func (r *Runner) drain(ctx context.Context, run *cycleRun) error {
 		if err != nil {
 			return fmt.Errorf("list end offsets: %w", err)
 		}
-		var current [2]int64
+		var current [3]int64
 		offsets.Each(func(o kadm.ListedOffset) { current[0] += o.Offset })
 		if cycle.Pattern == "P3" {
 			err := conn.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE sent_at IS NULL`).Scan(&current[1])
 			if err != nil {
 				return fmt.Errorf("count unsent: %w", err)
+			}
+		}
+		if len(cycle.Topology.Consumers) > 0 {
+			// Consumers may still be catching up after Kafka has gone quiet.
+			err := conn.QueryRow(ctx, `SELECT (SELECT count(*) FROM consumer.payments_naive)
+				+ (SELECT count(*) FROM consumer.payments_dedup)
+				+ (SELECT count(*) FROM consumer.payments_upsert)`).Scan(&current[2])
+			if err != nil {
+				return fmt.Errorf("count payments: %w", err)
 			}
 		}
 		if current != last {

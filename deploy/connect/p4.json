@@ -10,6 +10,7 @@
     "publication.autocreate.mode": "disabled",
     "snapshot.mode": "no_data",
     "poll.interval.ms": "{{poll_ms}}",
+    "retriable.restart.connector.wait.ms": "{{retry_wait_ms}}",
     "topic.prefix": "cdc{{cycle_slug}}",
     "table.include.list": "public.outbox",
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
