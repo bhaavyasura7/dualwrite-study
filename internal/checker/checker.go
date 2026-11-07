@@ -79,14 +79,28 @@ type Result struct {
 
 // Damage lists the exact pairs behind each metric, for root-cause analysis.
 type Damage struct {
-	Lost            []Pair      `json:"lost"`
-	LostDetail      []LostEvent `json:"lost_detail"`
-	Ghost           []Pair      `json:"ghost"`
-	Duplicates      []Pair      `json:"duplicates"` // one entry per extra copy
-	OutOfOrder      []Pair      `json:"out_of_order"`
-	StaleRedelivery []Pair      `json:"stale_redelivery"`
-	LostAfterSend   []Pair      `json:"lost_after_send"`
-	LostAfterAck    []Pair      `json:"lost_after_ack"`
+	Lost       []Pair      `json:"lost"`
+	LostDetail []LostEvent `json:"lost_detail"`
+	// LateAfterFailover counts pre-failover versions delivered after it (D vectors).
+	LateAfterFailover int `json:"late_after_failover"`
+	// SlotTimeline samples logical slots once a second (P4, P5).
+	SlotTimeline    []SlotSample `json:"slot_timeline,omitempty"`
+	Ghost           []Pair       `json:"ghost"`
+	Duplicates      []Pair       `json:"duplicates"` // one entry per extra copy
+	OutOfOrder      []Pair       `json:"out_of_order"`
+	StaleRedelivery []Pair       `json:"stale_redelivery"`
+	LostAfterSend   []Pair       `json:"lost_after_send"`
+	LostAfterAck    []Pair       `json:"lost_after_ack"`
+}
+
+// SlotSample is one reading of a replication slot.
+type SlotSample struct {
+	Time           time.Time `json:"time"`
+	Slot           string    `json:"slot"`
+	Active         bool      `json:"active"`
+	ConfirmedFlush string    `json:"confirmed_flush_lsn"`
+	Restart        string    `json:"restart_lsn"`
+	CurrentWAL     string    `json:"current_wal_lsn"`
 }
 
 // LostEvent explains one lost pair.
@@ -249,6 +263,24 @@ func RecoveryS(in Input, faultEnd time.Time) (seconds float64, ok bool) {
 		seconds = max(seconds, delivered.Sub(faultEnd).Seconds())
 	}
 	return seconds, true
+}
+
+// LateDeliveries counts versions committed before the moment whose first copy
+// reached Kafka after it: events still in flight when a fault struck.
+func LateDeliveries(in Input, moment time.Time) int {
+	first := make(map[Pair]time.Time, len(in.Kafka))
+	for _, r := range in.Kafka {
+		if t, seen := first[r.Pair]; !seen || r.Timestamp.Before(t) {
+			first[r.Pair] = r.Timestamp
+		}
+	}
+	late := 0
+	for _, v := range in.DB {
+		if delivered, ok := first[v.Pair]; ok && v.CommitTime.Before(moment) && delivered.After(moment) {
+			late++
+		}
+	}
+	return late
 }
 
 func toSet(pairs []Pair) map[Pair]struct{} {

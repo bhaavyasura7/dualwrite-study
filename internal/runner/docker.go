@@ -186,6 +186,21 @@ func (d *Docker) Logs(ctx context.Context, name string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// LogsSince returns what the container has written since the given time.
+func (d *Docker) LogsSince(ctx context.Context, name string, since time.Time) ([]byte, error) {
+	options := container.LogsOptions{ShowStdout: true, ShowStderr: true, Since: since.Format(time.RFC3339Nano)}
+	stream, err := d.cli.ContainerLogs(ctx, name, options)
+	if err != nil {
+		return nil, fmt.Errorf("logs of %s: %w", name, err)
+	}
+	defer func() { _ = stream.Close() }()
+	var out bytes.Buffer
+	if _, err := stdcopy.StdCopy(&out, &out, stream); err != nil {
+		return nil, fmt.Errorf("read logs of %s: %w", name, err)
+	}
+	return out.Bytes(), nil
+}
+
 // WaitForLog polls until marker appears in the container's log.
 func (d *Docker) WaitForLog(ctx context.Context, name, marker string) error {
 	for {

@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 2.3 · November 2026"
+subtitle: "Go implementation · version 2.5 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -597,7 +597,7 @@ send_failed, crash_after_n, inflight_at_crash, oldest_pending_ms,
 failover_at, failover_lag_bytes, failover_lag_ms, host, shard, git_commit,
 window_p50_ms, window_p99_ms, window_max_ms, recovery_s,
 throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s, load_failed,
-pre_host_load, pre_db_cpu_pct, pre_p99_ms, pre_flag, started_at, finished_at
+pre_host_load, pre_db_cpu_pct, pre_p99_ms, pre_flag, thermal, run_order, started_at, finished_at
 ```
 
 Every row carries the random seed and the pinned versions so any cycle can be replayed.
@@ -615,6 +615,9 @@ make report                # run analysis scripts → figures/
 make verify                # check a results file before using it
 make backup                # push results/ to the private results repo
 make demo                  # one crash cycle end to end
+make run-must              # final must-run correctness vectors, resumable
+make run-perf              # P-1 on its own, on a fully idle Mac
+make pause                 # stop after the current cycle
 ```
 
 ## 14.5 Pre-run checklist
@@ -636,6 +639,14 @@ Before any run used for results:
 
 `-allow-dirty` marks a run as a trial and skips the machine checks.
 
+**Randomised order.** Within each group of cycles that share a worker and broker configuration, the order is shuffled using the run seed, so slow drift such as heat cannot favour one pattern. Controls still run first and failover cycles last. The order is written to `<results>.order.txt` and each row's `run_order`.
+
+**Sessions.** A run can be stopped and resumed, so the Mac can be used between sessions. `make pause`, or a first Ctrl-C, finishes the current cycle and stops. A second Ctrl-C stops at once; the interrupted cycle is discarded, not recorded as failed, and reruns on resume. Resuming is the same command. Correctness vectors (`make run-must`) and performance vectors (`make run-perf`) run in separate sessions, because P-1 needs a fully idle Mac.
+
+**Known test-bed limitations.** Tail latency varies between identical cycles, mostly from slow COMMITs (disk sync inside Docker's VM on macOS); durability settings are left unchanged, and p99 is reported with its spread, with medians as the primary numbers (finding F27). Results come from one machine, one Postgres and one Kafka version, one Kafka client (franz-go) and synthetic load.
+
+**Thermal state.** Each cycle records macOS's thermal and performance warnings (`pmset -g therm`) in `thermal`, and flags the cycle if any is present. On Apple Silicon these are warning levels; no CPU speed limit is exposed without root, which is a stated limitation.
+
 **Backups.** Results go to a separate private repo (`dualwrite-results`), one folder per host. They are kept apart from the code because a commit in the code repo would change the hash recorded in running cycles, and the runner refuses to mix commits in one file.
 
 # 15. Load generator (`cmd/loadgen`) and analysis
@@ -644,6 +655,10 @@ Before any run used for results:
 
 **Analysis:** Python scripts in `analysis/` read `results.csv` and produce, at minimum:
 damage by pattern × fault (bars with 95% confidence intervals), a pattern × fault heatmap, knob sweeps (lines), exactly-once on/off and consumer-strategy comparisons, and inconsistency-window distributions.
+
+**Window and cost by load, fixed before the final runs.** P3, P4 and P5's inconsistency window depends on load: the relay sleeps only when it finds nothing to send, and Debezium polls on an interval. So the window is reported at every load level in P-1, never as a single number, and the paper states that a single window figure would be misleading. Database cost is reported as CPU per 1,000 changes (`db_cpu_pct / (throughput_ops / 1000)`), so patterns compare fairly across load levels.
+
+**Results that need a cause first.** A result that looks anomalous is not reported until its cause is known. Currently: P2's p99 latency at 1,000 orders/s, if the P-1 repeats confirm it.
 
 **Loss distributions, fixed before the final runs.** For every loss metric, the analysis reports the percentage of cycles with any loss, the median, p90, maximum and a histogram, not just the mean. The same outage can lose nothing or lose everything in flight (finding F24), so a mean alone would mislead.
 
@@ -705,7 +720,7 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 2.3
+# 20. Changes in versions 1.1 to 2.5
 
 | # | Area | Change |
 |---|---|---|
@@ -766,3 +781,5 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 55 | 14.5 | (2.2) Pre-run checklist, mostly enforced by the runner |
 | 56 | 14.1 | (2.2) `burst_at_s` counts from the end of warm-up; `PG_IDLE_TX_TIMEOUT_S` applied per cycle |
 | 57 | 14.4, 14.5 | (2.3) `make verify`, `make backup`, `make demo`; results in a separate private repo |
+| 58 | 15 | (2.4) Window reported per load level; database CPU per 1,000 changes; anomalies need a cause before reporting |
+| 59 | 14.2 | (2.5) Randomised order within groups; resumable sessions; interrupted cycles discarded; thermal state per cycle |

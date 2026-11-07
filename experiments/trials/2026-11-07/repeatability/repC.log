@@ -1,0 +1,41 @@
+time=2026-11-07T14:54:41.921+05:30 level=INFO msg="run started" cycles=20 commit=b0836ddbd4b3-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/repC.csv
+time=2026-11-07T14:54:59.664+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r01 fault=proxy_disable target=kafka-app
+time=2026-11-07T14:55:40.740+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r01 n=1 of=20 status=OK lost=560 hooked_lost=0 inflight=0 cycle_s=58.79084725 load_s=47.613646708
+time=2026-11-07T14:55:58.187+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r02 fault=proxy_disable target=kafka-app
+time=2026-11-07T14:56:39.169+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r02 n=2 of=20 status=OK lost=2370 hooked_lost=0 inflight=0 cycle_s=58.404991334 load_s=47.614178333
+time=2026-11-07T14:56:56.607+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r03 fault=proxy_disable target=kafka-app
+time=2026-11-07T14:57:37.596+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r03 n=3 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.410126792 load_s=47.613513333
+time=2026-11-07T14:57:55.053+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r04 fault=proxy_disable target=kafka-app
+time=2026-11-07T14:58:36.087+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r04 n=4 of=20 status=OK lost=2114 hooked_lost=0 inflight=0 cycle_s=58.460120625 load_s=47.617944667
+time=2026-11-07T14:58:53.553+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r05 fault=proxy_disable target=kafka-app
+time=2026-11-07T14:59:34.931+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r05 n=5 of=20 status=OK lost=791 hooked_lost=0 inflight=0 cycle_s=58.808423125 load_s=47.61497025
+time=2026-11-07T14:59:52.456+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r06 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:00:33.417+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r06 n=6 of=20 status=OK lost=2105 hooked_lost=0 inflight=0 cycle_s=58.453826166 load_s=47.612635458
+time=2026-11-07T15:00:50.856+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r07 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:01:31.859+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r07 n=7 of=20 status=OK lost=2041 hooked_lost=0 inflight=0 cycle_s=58.41143725 load_s=47.613596375
+time=2026-11-07T15:01:49.309+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r08 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:02:30.242+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r08 n=8 of=20 status=OK lost=2408 hooked_lost=0 inflight=0 cycle_s=58.3623695 load_s=47.611007625
+time=2026-11-07T15:02:47.689+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r09 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:03:28.640+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r09 n=9 of=20 status=OK lost=518 hooked_lost=0 inflight=0 cycle_s=58.385818334 load_s=47.612851458
+time=2026-11-07T15:03:46.075+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r10 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:04:27.046+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r10 n=10 of=20 status=OK lost=1342 hooked_lost=0 inflight=0 cycle_s=58.379250042 load_s=47.613810709
+time=2026-11-07T15:04:44.503+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r11 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:05:25.461+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r11 n=11 of=20 status=OK lost=2323 hooked_lost=0 inflight=0 cycle_s=58.392287125 load_s=47.6116975
+time=2026-11-07T15:05:42.975+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r12 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:06:23.940+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r12 n=12 of=20 status=OK lost=2371 hooked_lost=0 inflight=0 cycle_s=58.444019375 load_s=47.6099615
+time=2026-11-07T15:06:41.510+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r13 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:07:22.540+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r13 n=13 of=20 status=OK lost=2376 hooked_lost=0 inflight=0 cycle_s=58.577168334 load_s=47.722055417
+time=2026-11-07T15:07:39.988+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r14 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:08:20.923+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r14 n=14 of=20 status=OK lost=2378 hooked_lost=0 inflight=0 cycle_s=58.354520375 load_s=47.613178167
+time=2026-11-07T15:08:38.358+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r15 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:09:19.359+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r15 n=15 of=20 status=OK lost=2323 hooked_lost=0 inflight=0 cycle_s=58.41273075 load_s=47.61262275
+time=2026-11-07T15:09:36.819+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r16 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:10:17.745+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r16 n=16 of=20 status=OK lost=2066 hooked_lost=0 inflight=0 cycle_s=58.364524791 load_s=47.613122875
+time=2026-11-07T15:10:35.191+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r17 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:11:16.084+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r17 n=17 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.331285833 load_s=47.610318375
+time=2026-11-07T15:11:33.525+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r18 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:12:14.495+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r18 n=18 of=20 status=OK lost=2365 hooked_lost=0 inflight=0 cycle_s=58.373297708 load_s=47.614017083
+time=2026-11-07T15:12:31.976+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r19 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:13:13.000+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r19 n=19 of=20 status=OK lost=1258 hooked_lost=0 inflight=0 cycle_s=58.48088475 load_s=47.613341375
+time=2026-11-07T15:13:30.457+05:30 level=INFO msg="fault injected" cycle=C-2_P1_c1_r20 fault=proxy_disable target=kafka-app
+time=2026-11-07T15:14:11.371+05:30 level=INFO msg="cycle finished" cycle=C-2_P1_c1_r20 n=20 of=20 status=OK lost=804 hooked_lost=0 inflight=0 cycle_s=58.348066459 load_s=47.613230333

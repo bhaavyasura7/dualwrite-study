@@ -182,6 +182,25 @@ func TestLostAfterAck(t *testing.T) {
 	}
 }
 
+func TestLateDeliveries(t *testing.T) {
+	moment := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	in := Input{
+		DB: []Version{
+			{Pair{"before-late", 1}, moment.Add(-time.Second)},
+			{Pair{"before-early", 1}, moment.Add(-time.Second)},
+			{Pair{"after", 1}, moment.Add(time.Second)},
+		},
+		Kafka: []Record{
+			{Pair: Pair{"before-late", 1}, Timestamp: moment.Add(time.Second)},
+			{Pair: Pair{"before-early", 1}, Timestamp: moment.Add(-time.Millisecond)},
+			{Pair: Pair{"after", 1}, Timestamp: moment.Add(2 * time.Second)},
+		},
+	}
+	if got := LateDeliveries(in, moment); got != 1 {
+		t.Fatalf("late = %d, want 1", got)
+	}
+}
+
 func TestRecoveryS(t *testing.T) {
 	end := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
 	in := Input{

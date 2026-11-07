@@ -1,0 +1,19 @@
+time=2026-11-07T15:24:16.038+05:30 level=INFO msg="run started" cycles=9 commit=b0836ddbd4b3-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/cdc.csv
+time=2026-11-07T15:24:51.706+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r06 fault=failover target=postgres
+time=2026-11-07T15:25:32.225+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r06 n=1 of=9 status=OK lost=88 hooked_lost=0 inflight=0 cycle_s=68.88029675 load_s=57.033577125
+time=2026-11-07T15:26:11.624+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r05 fault=failover target=postgres
+time=2026-11-07T15:26:51.160+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r05 n=2 of=9 status=OK lost=97 hooked_lost=0 inflight=0 cycle_s=72.537123292 load_s=60.402083792
+time=2026-11-07T15:27:15.998+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r04 fault=failover target=postgres
+time=2026-11-07T15:27:55.475+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r04 n=3 of=9 status=OK lost=90 hooked_lost=0 inflight=0 cycle_s=57.919815375 load_s=46.004806375
+time=2026-11-07T15:28:19.937+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r03 fault=failover target=postgres
+time=2026-11-07T15:28:58.696+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r03 n=4 of=9 status=OK lost=57 hooked_lost=0 inflight=0 cycle_s=56.910218042 load_s=45.570184375
+time=2026-11-07T15:29:28.443+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r07 fault=failover target=postgres
+time=2026-11-07T15:30:07.028+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r07 n=5 of=9 status=OK lost=33 hooked_lost=0 inflight=0 cycle_s=62.046715417 load_s=50.652704
+time=2026-11-07T15:30:48.034+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T15:31:37.344+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r01 n=6 of=9 status=OK lost=1820 hooked_lost=0 inflight=0 cycle_s=83.605938708 load_s=70.625947875
+time=2026-11-07T15:32:05.026+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r02 fault=failover target=postgres
+time=2026-11-07T15:32:43.808+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r02 n=7 of=9 status=OK lost=64 hooked_lost=0 inflight=0 cycle_s=60.057992542 load_s=47.5972365
+time=2026-11-07T15:33:09.944+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r08 fault=failover target=postgres
+time=2026-11-07T15:33:49.320+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r08 n=8 of=9 status=OK lost=41 hooked_lost=0 inflight=0 cycle_s=59.066058167 load_s=47.063410791
+time=2026-11-07T15:34:29.253+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r09 fault=failover target=postgres
+time=2026-11-07T15:35:08.464+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r09 n=9 of=9 status=OK lost=40 hooked_lost=0 inflight=0 cycle_s=72.618645042 load_s=60.5372475

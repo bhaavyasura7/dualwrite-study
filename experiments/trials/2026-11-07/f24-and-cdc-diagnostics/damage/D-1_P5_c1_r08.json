@@ -1,0 +1,464 @@
+{
+  "lost": [
+    {
+      "order": "00d2be78-30e0-480a-a7fa-bf05acb7e6bb",
+      "seq": 1
+    },
+    {
+      "order": "00d2be78-30e0-480a-a7fa-bf05acb7e6bb",
+      "seq": 2
+    },
+    {
+      "order": "0252c5fd-a920-4fe6-be1e-55e69bf28c1c",
+      "seq": 1
+    },
+    {
+      "order": "0252c5fd-a920-4fe6-be1e-55e69bf28c1c",
+      "seq": 2
+    },
+    {
+      "order": "12b5f132-99b7-4895-a441-f14efd0e4836",
+      "seq": 1
+    },
+    {
+      "order": "1a014fb3-bc00-4304-86c3-def457dfa8d0",
+      "seq": 1
+    },
+    {
+      "order": "1fd82697-e4c9-4424-829b-4e0f9bbb0dd9",
+      "seq": 1
+    },
+    {
+      "order": "24e9050c-12bd-44d5-93c0-bd323911fd33",
+      "seq": 1
+    },
+    {
+      "order": "24e9050c-12bd-44d5-93c0-bd323911fd33",
+      "seq": 2
+    },
+    {
+      "order": "32ca56a7-dff2-47f9-89e0-5c35a102b162",
+      "seq": 1
+    },
+    {
+      "order": "3ec59e3a-913e-4128-81b7-3ebc58b92611",
+      "seq": 1
+    },
+    {
+      "order": "45ada860-e694-484e-8dc9-13c17e0c2221",
+      "seq": 1
+    },
+    {
+      "order": "45ada860-e694-484e-8dc9-13c17e0c2221",
+      "seq": 2
+    },
+    {
+      "order": "4b9234e4-3aef-4984-b57e-0ccc45049c06",
+      "seq": 1
+    },
+    {
+      "order": "547c953d-5be7-46a1-b86d-59fc23ca1625",
+      "seq": 1
+    },
+    {
+      "order": "547c953d-5be7-46a1-b86d-59fc23ca1625",
+      "seq": 2
+    },
+    {
+      "order": "56c47238-6087-4f14-a3c7-2db9461f70c5",
+      "seq": 1
+    },
+    {
+      "order": "63d9f776-b3bc-4bf8-9aaa-7e8225fa4016",
+      "seq": 1
+    },
+    {
+      "order": "6ab90717-d2f5-4c3c-8342-a704996c64e8",
+      "seq": 1
+    },
+    {
+      "order": "796f3192-a205-41b8-9ff4-294494e6ca54",
+      "seq": 1
+    },
+    {
+      "order": "7f4ba42c-bbc2-4cf8-9d3f-bf95e061b9de",
+      "seq": 1
+    },
+    {
+      "order": "a2140913-fe2c-4c85-862f-7a42d34c2d3f",
+      "seq": 1
+    },
+    {
+      "order": "a3091bc7-00c5-489e-ad76-53536796fe28",
+      "seq": 1
+    },
+    {
+      "order": "a38ecf89-3d3b-41a1-b682-3db08fc71ffb",
+      "seq": 1
+    },
+    {
+      "order": "a6feffa2-958c-4198-92e3-8a5e933b52f1",
+      "seq": 1
+    },
+    {
+      "order": "a77a809f-2a09-4411-bce2-3549572dca72",
+      "seq": 1
+    },
+    {
+      "order": "a7f7a473-f3dd-40b9-9ddb-5e76eb239eb0",
+      "seq": 1
+    },
+    {
+      "order": "a93ecfd0-8c86-4e64-8726-4b5155db4717",
+      "seq": 1
+    },
+    {
+      "order": "b57b2534-76ae-4253-8517-ece8110aca5c",
+      "seq": 1
+    },
+    {
+      "order": "b5ad8e36-ee59-4e86-aad7-8ed9dc2ce72d",
+      "seq": 1
+    },
+    {
+      "order": "bf2a514e-d822-4119-835a-5f3b663dad9a",
+      "seq": 1
+    },
+    {
+      "order": "c4a9d211-6a15-4cf6-9c83-3f74be629242",
+      "seq": 1
+    },
+    {
+      "order": "cdf9b1f2-65c0-4931-96bc-8e39c3d929a5",
+      "seq": 1
+    },
+    {
+      "order": "d0bd8972-2014-474f-a38c-ec015370e584",
+      "seq": 1
+    },
+    {
+      "order": "d2e94740-6da0-4fb2-9e55-b622b0273aa1",
+      "seq": 1
+    },
+    {
+      "order": "d4a67297-56f6-4a4f-a611-d410b2bfb5f2",
+      "seq": 1
+    },
+    {
+      "order": "d4a67297-56f6-4a4f-a611-d410b2bfb5f2",
+      "seq": 2
+    },
+    {
+      "order": "f1d2119e-721c-4ef2-a691-e385ffe67284",
+      "seq": 1
+    },
+    {
+      "order": "f440d2a0-22be-49d9-9273-371789a1742f",
+      "seq": 1
+    },
+    {
+      "order": "fa774ef3-8b80-4864-86e8-646260e3f364",
+      "seq": 1
+    },
+    {
+      "order": "fdfd10f5-8e98-4056-9b04-3fce2c4d4e2b",
+      "seq": 1
+    }
+  ],
+  "lost_detail": [
+    {
+      "order": "00d2be78-30e0-480a-a7fa-bf05acb7e6bb",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.659984+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "00d2be78-30e0-480a-a7fa-bf05acb7e6bb",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.843096+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "0252c5fd-a920-4fe6-be1e-55e69bf28c1c",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.629439+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "0252c5fd-a920-4fe6-be1e-55e69bf28c1c",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.798831+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "12b5f132-99b7-4895-a441-f14efd0e4836",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.74076+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "1a014fb3-bc00-4304-86c3-def457dfa8d0",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.680081+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "1fd82697-e4c9-4424-829b-4e0f9bbb0dd9",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.650349+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "24e9050c-12bd-44d5-93c0-bd323911fd33",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.5223+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "24e9050c-12bd-44d5-93c0-bd323911fd33",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.794409+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "32ca56a7-dff2-47f9-89e0-5c35a102b162",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.811092+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "3ec59e3a-913e-4128-81b7-3ebc58b92611",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.730068+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "45ada860-e694-484e-8dc9-13c17e0c2221",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.590302+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "45ada860-e694-484e-8dc9-13c17e0c2221",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.785531+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "4b9234e4-3aef-4984-b57e-0ccc45049c06",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.720245+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "547c953d-5be7-46a1-b86d-59fc23ca1625",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.540133+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "547c953d-5be7-46a1-b86d-59fc23ca1625",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.622628+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "56c47238-6087-4f14-a3c7-2db9461f70c5",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.690455+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "63d9f776-b3bc-4bf8-9aaa-7e8225fa4016",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.780352+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "6ab90717-d2f5-4c3c-8342-a704996c64e8",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.799434+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "796f3192-a205-41b8-9ff4-294494e6ca54",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.610272+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "7f4ba42c-bbc2-4cf8-9d3f-bf95e061b9de",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.789087+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "a2140913-fe2c-4c85-862f-7a42d34c2d3f",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.6999+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "a3091bc7-00c5-489e-ad76-53536796fe28",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.840725+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "a38ecf89-3d3b-41a1-b682-3db08fc71ffb",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.569559+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "a6feffa2-958c-4198-92e3-8a5e933b52f1",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.750586+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "a77a809f-2a09-4411-bce2-3549572dca72",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.760066+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "a7f7a473-f3dd-40b9-9ddb-5e76eb239eb0",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.529652+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "a93ecfd0-8c86-4e64-8726-4b5155db4717",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.829957+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "b57b2534-76ae-4253-8517-ece8110aca5c",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.526678+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "b5ad8e36-ee59-4e86-aad7-8ed9dc2ce72d",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.770414+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "bf2a514e-d822-4119-835a-5f3b663dad9a",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.549899+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "c4a9d211-6a15-4cf6-9c83-3f74be629242",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.849554+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "cdf9b1f2-65c0-4931-96bc-8e39c3d929a5",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.620284+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "d0bd8972-2014-474f-a38c-ec015370e584",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.710168+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "d2e94740-6da0-4fb2-9e55-b622b0273aa1",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.819836+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "d4a67297-56f6-4a4f-a611-d410b2bfb5f2",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.600054+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "d4a67297-56f6-4a4f-a611-d410b2bfb5f2",
+      "seq": 2,
+      "commit_time": "2026-11-07T15:33:10.820368+05:30",
+      "final_version": 2,
+      "intermediate": false
+    },
+    {
+      "order": "f1d2119e-721c-4ef2-a691-e385ffe67284",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.580157+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "f440d2a0-22be-49d9-9273-371789a1742f",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.640081+05:30",
+      "final_version": 2,
+      "intermediate": true
+    },
+    {
+      "order": "fa774ef3-8b80-4864-86e8-646260e3f364",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.559695+05:30",
+      "final_version": 1,
+      "intermediate": false
+    },
+    {
+      "order": "fdfd10f5-8e98-4056-9b04-3fce2c4d4e2b",
+      "seq": 1,
+      "commit_time": "2026-11-07T15:33:10.670382+05:30",
+      "final_version": 2,
+      "intermediate": true
+    }
+  ],
+  "late_after_failover": 133,
+  "ghost": null,
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": null,
+  "lost_after_ack": null
+}

@@ -1,0 +1,14 @@
+2026-11-07 10:07:08.541 GMT [579] LOG:  duration: 50.134 ms  statement: commit
+2026-11-07 10:07:08.568 GMT [597] LOG:  duration: 73.978 ms  statement: commit
+2026-11-07 10:08:31.221 GMT [1055] LOG:  duration: 54.216 ms  statement: commit
+2026-11-07 10:08:31.232 GMT [1060] LOG:  duration: 67.568 ms  statement: commit
+2026-11-07 10:08:31.233 GMT [1058] LOG:  duration: 68.501 ms  statement: commit
+2026-11-07 10:08:31.241 GMT [1050] LOG:  duration: 72.652 ms  statement: commit
+2026-11-07 10:08:31.241 GMT [1059] LOG:  duration: 53.255 ms  statement: commit
+2026-11-07 10:08:31.240 GMT [1057] LOG:  duration: 59.720 ms  statement: commit
+2026-11-07 10:08:41.364 GMT [1108] LOG:  duration: 58.706 ms  parse stmtcache_d06eede545bded7d50f0a08376ad14b0ec800e3817eec4c8: UPDATE orders SET status = $2, version = version + 1, updated_at = now()
+2026-11-07 10:08:41.397 GMT [1107] LOG:  duration: 56.379 ms  execute stmtcache_72e5898a69e9add97152a671a676176ced5a1b3f4af8dcc0: INSERT INTO orders (order_id, status, version, amount) VALUES ($1, $2, 1, $3)
+2026-11-07 10:08:41.398 GMT [1109] LOG:  duration: 51.933 ms  execute stmtcache_72e5898a69e9add97152a671a676176ced5a1b3f4af8dcc0: INSERT INTO orders (order_id, status, version, amount) VALUES ($1, $2, 1, $3)
+2026-11-07 10:08:55.665 GMT [1137] LOG:  duration: 56.459 ms  bind stmtcache_72e5898a69e9add97152a671a676176ced5a1b3f4af8dcc0: INSERT INTO orders (order_id, status, version, amount) VALUES ($1, $2, 1, $3)
+2026-11-07 10:08:55.672 GMT [1108] LOG:  duration: 123.102 ms  execute stmtcache_d06eede545bded7d50f0a08376ad14b0ec800e3817eec4c8: UPDATE orders SET status = $2, version = version + 1, updated_at = now()
+2026-11-07 10:08:55.674 GMT [1138] LOG:  duration: 80.356 ms  execute stmtcache_d06eede545bded7d50f0a08376ad14b0ec800e3817eec4c8: UPDATE orders SET status = $2, version = version + 1, updated_at = now()

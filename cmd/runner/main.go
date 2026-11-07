@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -35,6 +37,8 @@ func run() error {
 	catalogue := flag.String("catalogue", "experiments/vectors.yaml", "test catalogue")
 	vectors := flag.String("vectors", "", "comma-separated vector IDs; empty runs all")
 	patterns := flag.String("patterns", "", "comma-separated patterns; empty runs all")
+	priorities := flag.String("priority", "", "comma-separated priorities (must, should, optional); empty runs all")
+	exclude := flag.String("exclude-groups", "", "comma-separated groups to leave out, for example perf")
 	repeats := flag.Int("repeats", 0, "cap repeats per cell; 0 keeps the catalogue's value")
 	shardFlag := flag.String("shard", "", "this machine's share of the vectors, as i/n")
 	perf := flag.Bool("perf", false, "with -shard, also run the performance vectors on this machine")
@@ -48,6 +52,7 @@ func run() error {
 	only := flag.String("cycles", "", "comma-separated cycle IDs; empty runs all selected")
 	overrides := flag.String("env", "", "trial only: comma-separated KEY=VALUE overrides; recorded in env_json")
 	verify := flag.String("verify", "", "check a results file against the selected cycles and exit")
+	fixedSeed := flag.Bool("fixed-seed", false, "trial only: use -seed unchanged in every cycle")
 	merge := flag.Bool("merge", false, "merge results/results.*.csv into results/results.csv")
 	flag.Parse()
 
@@ -81,6 +86,13 @@ func run() error {
 		return err
 	}
 	cycles := selectCycles(all, split(*vectors), split(*patterns), *repeats, shard, *perf)
+	if wanted := split(*priorities); len(wanted) > 0 {
+		cycles = slices.DeleteFunc(cycles, func(c runner.Cycle) bool { return !slices.Contains(wanted, c.Priority) })
+	}
+	if skipped := split(*exclude); len(skipped) > 0 {
+		cycles = slices.DeleteFunc(cycles, func(c runner.Cycle) bool { return slices.Contains(skipped, c.Group) })
+	}
+	cycles = shuffleWithinGroups(cycles, *seed)
 	if ids := split(*only); len(ids) > 0 {
 		cycles = slices.DeleteFunc(cycles, func(c runner.Cycle) bool { return !slices.Contains(ids, c.ID) })
 	}
@@ -164,8 +176,21 @@ func run() error {
 	}
 	defer func() { _ = docker.Close() }()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
+	// First Ctrl-C: finish the current cycle, then stop. Second: stop now; the
+	// interrupted cycle is discarded and reruns on resume.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var stopping atomic.Bool
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-signals
+		stopping.Store(true)
+		slog.Warn("stopping after the current cycle; press Ctrl-C again to stop now")
+		<-signals
+		cancel()
+	}()
+	_ = os.Remove(filepath.Join(resultsDir, "STOP"))
 	versions, err := docker.Versions(ctx, runner.BaseContainers, []string{"dualwrite/orderservice:dev", "dualwrite/relay:dev", "dualwrite/consumer:dev"})
 	if err != nil {
 		return err
@@ -177,14 +202,16 @@ func run() error {
 	}
 
 	r, err := runner.New(runner.Options{
-		RunID:      fmt.Sprintf("%s-%s", commit, time.Now().UTC().Format("20060102T150405")),
-		GitCommit:  commit,
-		Host:       host,
-		Versions:   string(versionsJSON),
-		Shard:      shard,
-		Strict:     !*allowDirty,
-		Seed:       *seed,
-		ResultsDir: resultsDir,
+		RunID:         fmt.Sprintf("%s-%s", commit, time.Now().UTC().Format("20060102T150405")),
+		GitCommit:     commit,
+		Host:          host,
+		Versions:      string(versionsJSON),
+		Shard:         shard,
+		Strict:        !*allowDirty,
+		FixedSeed:     *fixedSeed,
+		StopRequested: stopping.Load,
+		Seed:          *seed,
+		ResultsDir:    resultsDir,
 	}, docker, store)
 	if err != nil {
 		return err
@@ -193,8 +220,57 @@ func run() error {
 	if err := r.Preflight(ctx); err != nil {
 		return err
 	}
+	if err := writeOrder(path, cycles); err != nil {
+		return err
+	}
 	slog.Info("run started", "cycles", len(cycles), "commit", commit, "results", path)
 	return r.Run(ctx, cycles)
+}
+
+// rank orders groups of cycles. Controls run first: a failure there means the
+// setup is wrong. Failover cycles rebuild the database, so they run last (SPEC 12).
+// In between, cycles are grouped by broker count and Connect worker
+// configuration, which need a recreate to change.
+func rank(c runner.Cycle) string {
+	order := "1"
+	switch {
+	case c.Group == "control":
+		order = "0"
+	case c.RequiresRebuild:
+		order = "2"
+	}
+	return fmt.Sprint(order, c.Topology.Brokers, c.Env["CONNECT_EOS"], c.Env["OFFSET_FLUSH_MS"])
+}
+
+// shuffleWithinGroups randomises the order of cycles that share a rank, using the
+// run seed, so slow drift such as heat cannot favour one pattern. Groups keep
+// their place, and the same seed gives the same order, so resume works.
+func shuffleWithinGroups(cycles []runner.Cycle, seed uint64) []runner.Cycle {
+	rng := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
+	shuffled := slices.Clone(cycles)
+	for start := 0; start < len(shuffled); {
+		end := start + 1
+		for end < len(shuffled) && rank(shuffled[end]) == rank(shuffled[start]) {
+			end++
+		}
+		group := shuffled[start:end]
+		rng.Shuffle(len(group), func(i, j int) { group[i], group[j] = group[j], group[i] })
+		start = end
+	}
+	return shuffled
+}
+
+// writeOrder records the run order next to the results file.
+func writeOrder(results string, cycles []runner.Cycle) error {
+	var out strings.Builder
+	for i, c := range cycles {
+		fmt.Fprintf(&out, "%d %s\n", i+1, c.ID)
+	}
+	path := strings.TrimSuffix(results, ".csv") + ".order.txt"
+	if err := os.WriteFile(path, []byte(out.String()), 0o644); err != nil {
+		return fmt.Errorf("write run order: %w", err)
+	}
+	return nil
 }
 
 func verifyResults(path string, cycles []runner.Cycle) error {
@@ -237,16 +313,6 @@ func selectCycles(all []runner.Cycle, vectors, patterns []string, repeats int, s
 			continue
 		}
 		selected = append(selected, c)
-	}
-	// Failover cycles rebuild the database, so they run last (SPEC 12). Cycles are
-	// grouped by broker count and Connect worker configuration, which need a
-	// recreate to change.
-	rank := func(c runner.Cycle) string {
-		last := "0"
-		if c.RequiresRebuild {
-			last = "1"
-		}
-		return fmt.Sprint(last, c.Topology.Brokers, c.Env["CONNECT_EOS"], c.Env["OFFSET_FLUSH_MS"])
 	}
 	slices.SortStableFunc(selected, func(a, b runner.Cycle) int { return strings.Compare(rank(a), rank(b)) })
 	return selected

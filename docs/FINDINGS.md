@@ -18,14 +18,17 @@ Each unexpected result, kept for the paper's findings. Status: **confirmed** mea
 | 2 | 8.8 s delivery with a 5 s timeout | Idempotence holds records of unknown outcome. Our first guess, a long in-flight request, was wrong | Trace, then idempotence on and off | Confirmed in 2 runs per setting | F2 |
 | 3 | P2 lost nothing in short outages | Retries run after Kafka returns. Our guess that they never run was wrong | Outage matrix | Confirmed for 8 s outages | F12 |
 | 4 | Retries reorder events (156–500 per outage) | A retried older version lands after a newer one | Outage matrix | Likely; H-REORDER will test it | F12 |
-| 5 | Same 8 s cut lost 0 or about 1,500 | Whether requests were in flight when the connection died | Not tested | Open | F24 |
+| 5 | Same 8 s cut lost 0 or about 1,500 | Loss is decided per partition, in one of three modes; what picks the mode is inside franz-go | 20 repeats by partition; in-flight-at-cut tested and ruled out | Mechanism partly confirmed; root cause open | F24, F28 |
 | 6 | Configured batch size hardly matters above about 100 | Effective batch follows arrivals | Poll-interval sweep | Likely; H-BATCH will test it | F15 |
 | 7 | CDC window of about 530 ms | `poll.interval.ms`; the maximum of about twice the interval suggests two polling stages | Poll 100 against 500 | Proportionality confirmed; two stages inferred | F14 |
 | 8 | About 1,900 lost in some CDC failovers | Debezium's 10 s retry wait delays connector deletion | Connect logs: 3 waits in 3 affected cycles | Confirmed | F19 |
-| 9 | Those cycles also lost 12–84 events from before failover | Not known | Not tested | Open | F19 |
+| 9 | Those cycles also lost 12–84 events from before failover | Events Debezium had read but not sent are dropped on a retry restart, and after failover the slot is gone, so they cannot be re-read | Retry path without failover: 20 of 20 cycles, 0 lost; raw topic check | Confirmed | F29 |
 | 10 | Snapshot recovery still loses events | A snapshot holds only latest state | All 851 lost events were intermediate versions | Confirmed | F19 |
 | 11 | No ghosts in D-1 at first | Replication lag near zero at this load | 200 ms of injected lag gave 16–23 ghosts | Confirmed | F20 |
-| 12 | Pre-cycle latency blips with the Mac idle | Not known | Not tested | Open | F17 |
+| 12 | Pre-cycle latency blips; noisy p99 in repeats | Slow COMMIT (disk sync in Docker's VM) | Slow-statement log; checkpoints and drift ruled out | Likely; reported as a test-bed limitation | F27 |
+| 14 | P3's window shrank from 244 ms at 100/s to 9 ms at 1,000/s | The relay sleeps only when it finds nothing to send | Two load levels | Likely | F26 |
+| 15 | P4 and P5's window also shrank under load (about 530 to about 320 ms) | Debezium's polling interval | Two load levels | Open | F26 |
+| 16 | P2's p99 latency 432 ms at 1,000/s, against 64–128 ms for the others | Not known | One 60 s run | Open; must be explained before reporting | F26 |
 | 13 | G-4 showed no naive duplicates | Per-record commits leave at most one event uncommitted | One cycle only | Open | F25 |
 
 ## Harness bugs
@@ -288,6 +291,49 @@ G-1 and G-2 match their hypotheses, including that committing the offset first d
 G-4 showed no naive duplicates in its single cycle, against its hypothesis. Consumers commit after every record, so at most one uncommitted event exists when a member pauses, which may make the effect rare. Needs the full run.
 
 Evidence: `experiments/trials/2026-11-07/m8-consumers/`.
+
+## F26. The Mac sustains 1,000 orders/s on every pattern; window and cost depend on load (Trial)
+
+60 s per pattern at 1,000 orders/s (about 1,790 changes/s), one run each, no faults: 0 failed requests and 0 damage throughout.
+
+| Pattern | Latency p99 | Window p50 | Window p99 | DB CPU | DB CPU per 1,000 changes |
+|---|---|---|---|---|---|
+| P1 | 66 ms | 3 ms | 12 ms | 39% | 22% |
+| P2 | 432 ms | 3 ms | 7 ms | 34% | 19% |
+| P3 | 77 ms | 9 ms | 32 ms | 56% | 31% |
+| P4 | 128 ms | 340 ms | 867 ms | 71% | 40% |
+| P5 | 64 ms | 309 ms | 846 ms | 62% | 34% |
+
+A-7's 1,000/s cells stay in. Cost order: dual write, then outbox with a relay, then CDC, with P4 heaviest. At 100 orders/s, P3's window was about 240 ms and P4 and P5's about 530 ms, so all three change with load. The analysis rule in spec Section 15 reports the window per load level for that reason.
+
+Evidence: `experiments/trials/2026-11-07/capacity-1000/`.
+
+## F27. Repeatability: loss and central metrics are stable, tail latency is not (Trial)
+
+A-1 on P1, 30 cycles with the same seed: events ±0.1%, window p50 ±1%, throughput ±1%, hooked loss exactly 1 every time. Tail latency varied widely: p99 3–270 ms, window p99 7–120 ms. Ruled out: drift (correlation with cycle order 0.14), host load, Kafka (window p99 unrelated) and Postgres checkpoints (the slow cycles did not overlap them). Slow statements over 50 ms were mostly COMMIT (8 of 14, maximum 123 ms), which points to disk sync inside Docker's VM on macOS. Durability settings were not changed. Reported as a test-bed limitation: p99 is given with its spread, and medians are the primary numbers.
+
+Evidence: `experiments/trials/2026-11-07/repeatability/`, `f24-and-cdc-diagnostics/slow.txt`, `analysis/diagnostics/tail_checkpoints.py`.
+
+## F28. F24's loss is decided per partition, in three modes (Trial)
+
+C-2 on P1, 20 cycles with the same seed: totals from 0 to 2,408. Broken down by partition (Kafka's murmur2), each partition took one of three paths during the cut:
+- **held:** nothing lost; records wait and are delivered when the connection returns;
+- **timed out one by one:** about 800 lost, failing continuously as each record reaches the 5 s delivery timeout;
+- **failed at once with a dial error:** about 500 lost, all at once.
+
+Our hypothesis that a request in flight at the cut spares a partition was tested with per-partition traces and ruled out: no partition had one. Which mode a partition takes depends on franz-go's per-partition retry state, not yet pinned down. This is client behaviour, not a harness bug. Report the distribution with the cause marked open.
+
+Evidence: `experiments/trials/2026-11-07/repeatability/`, `f24-and-cdc-diagnostics/`, `analysis/diagnostics/f24_partitions.py`, `f24_inflight.py`, `f24_timing.py`.
+
+## F29. CDC does not lose events on a retry restart when the slot survives (Trial)
+
+X-1 (diagnostic catalogue): Debezium's Postgres connection cut for 5 s, 10 cycles each on P4 and P5. The retry path fired in 20 of 20 cycles. **Lost: 0 in all 20.** Duplicates about 3,500 and stale redeliveries about 1,560 per cycle, because the slot's `confirmed_flush_lsn` did not move within a cycle: Debezium confirms it only on an offset flush (60 s), so a restart replays from the slot's start.
+
+In failover the slot dies with the primary (PG16). Events Debezium had read but not sent survive a clean stop (79–151 delivered late in normal cycles) but are dropped on a retry restart, and cannot be re-read. The raw topic, read with Kafka's own consumer from offset 0 on every partition, contains none of the missing events, and committed minus lost equals the raw record count exactly in all three cycles checked.
+
+So the paper should say: CDC loses events at PG16 failover because the slot is lost, and the amount depends on whether Debezium's task stops cleanly. Not: "CDC loses events". Our configuration affects duplicates (flush interval) but not loss. Versions: Debezium 3.7.0.Final, Connect 4.3.1, Postgres 16.15. No matching known issue found (see `docs/RELATED_WORK.md`).
+
+Evidence: `experiments/trials/2026-11-07/cdc-retry-diagnostic/`, `f24-and-cdc-diagnostics/`, `analysis/diagnostics/cdc_retry.py`, `raw_topic_check.py`, `experiments/diagnostics.yaml`.
 
 ## Hypotheses to keep and test
 

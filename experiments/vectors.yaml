@@ -1,6 +1,6 @@
 # =============================================================================
 # Test catalogue — Fault-Injection Study of Database–Kafka Consistency Patterns
-# File: experiments/vectors.yaml   ·   Spec version 2.3   ·   November 2026
+# File: experiments/vectors.yaml   ·   Spec version 2.5   ·   November 2026
 # =============================================================================
 #
 # SCHEMA
@@ -723,4 +723,4 @@ vectors:
     repeats: 5
     load: { duration_s: 120 }
     sweep: { load.rate_per_s: [10, 100, 1000] }
-    expect: Cost of each pattern in latency, throughput and DB CPU (RQ3).
+    expect: Cost of each pattern in latency, throughput and DB CPU per 1,000 changes (RQ3). The window of P3-P5 changes with load, so it is reported at every rate.

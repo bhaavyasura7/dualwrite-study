@@ -14,6 +14,7 @@ const (
 	StallPointHit  = "STALL_POINT_HIT"
 	StallPointEnd  = "STALL_POINT_END"
 	ProduceTrace   = "PRODUCE_REQUEST"
+	BatchWritten   = "BATCH_WRITTEN"
 	SentCalled     = "SENT_CALLED"
 	SendAcked      = "SEND_ACKED"
 	SendFailed     = "SEND_FAILED"

@@ -28,7 +28,7 @@ var columns = []string{
 	"failover_at", "failover_lag_bytes", "failover_lag_ms", "host", "shard", "git_commit",
 	"window_p50_ms", "window_p99_ms", "window_max_ms", "recovery_s",
 	"throughput_ops", "latency_p50_ms", "latency_p99_ms", "db_cpu_pct", "load_s", "load_failed",
-	"pre_host_load", "pre_db_cpu_pct", "pre_p99_ms", "pre_flag", "started_at", "finished_at",
+	"pre_host_load", "pre_db_cpu_pct", "pre_p99_ms", "pre_flag", "thermal", "run_order", "started_at", "finished_at",
 }
 
 // Row is one cycle's result.
@@ -39,6 +39,8 @@ type Row struct {
 	Status, SweepJSON, EnvJSON, VersionsJSON                   string
 	RecoveryS                                                  string
 	LoadFailed                                                 int
+	Thermal                                                    string
+	Order                                                      int // position in the run's randomised order
 	FailoverLagBytes, FailoverLagMS                            string
 	FailoverAt                                                 time.Time
 	LoadRate                                                   int
@@ -93,7 +95,7 @@ func (r Row) record() []string {
 		failoverAt, r.FailoverLagBytes, r.FailoverLagMS, r.Host, r.Shard, r.GitCommit,
 		number(res.WindowP50MS), number(res.WindowP99MS), number(res.WindowMaxMS), r.RecoveryS,
 		number(r.ThroughputOps), number(r.LatencyP50MS), number(r.LatencyP99MS), number(r.DBCPUPct), number(r.LoadS), count(r.LoadFailed),
-		number(r.PreHostLoad), number(r.PreDBCPUPct), number(r.PreP99MS), r.PreFlag,
+		number(r.PreHostLoad), number(r.PreDBCPUPct), number(r.PreP99MS), r.PreFlag, r.Thermal, count(r.Order),
 		r.StartedAt.UTC().Format(time.RFC3339), r.FinishedAt.UTC().Format(time.RFC3339),
 	}
 }

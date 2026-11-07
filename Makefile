@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all merge verify backup demo
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all run-must run-perf pause merge verify backup demo
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -55,4 +55,14 @@ backup: ## push results/ to the private results repo
 
 demo: up ## one crash cycle end to end; writes results/demo.csv
 	go run ./cmd/runner -cycles A-1_P1_r01 -allow-dirty -results results/demo.csv
-	@cat results/demo.csv | cut -d, -f2,10,16,17,18 | column -s, -t
+	@python3 -c "import csv; [print({k: r[k] for k in ('cycle_id', 'status', 'events_total', 'lost', 'ghost', 'duplicates')}) for r in csv.DictReader(open('results/demo.csv'))]"
+
+run-must: ## final must-run correctness vectors; resumable, stop with make pause
+	caffeinate -i go run ./cmd/runner -priority must -exclude-groups perf $(ARGS)
+
+run-perf: ## performance vectors (P-1) on their own; the Mac must be fully idle
+	caffeinate -i go run ./cmd/runner -vectors P-1 $(ARGS)
+
+pause: ## stop the running run after its current cycle; rerun to resume
+	touch results/STOP
+	@echo "the run will stop after its current cycle"

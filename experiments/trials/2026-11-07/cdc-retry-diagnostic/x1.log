@@ -1,0 +1,41 @@
+time=2026-11-07T15:42:43.842+05:30 level=INFO msg="run started" cycles=20 commit=b0836ddbd4b3-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/x1.csv
+time=2026-11-07T15:43:04.958+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r08 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:43:42.350+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r08 n=1 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.495634917 load_s=45.547266958
+time=2026-11-07T15:44:02.827+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r05 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:44:40.411+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r05 n=2 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.044338041 load_s=45.430465708
+time=2026-11-07T15:45:00.906+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r07 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:45:38.511+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r07 n=3 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.081911958 load_s=45.502412375
+time=2026-11-07T15:45:58.956+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r04 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:46:36.609+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r04 n=4 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.085599833 load_s=45.505313833
+time=2026-11-07T15:46:57.102+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r08 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:47:34.821+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r08 n=5 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.1774255 load_s=45.457100333
+time=2026-11-07T15:47:55.603+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r05 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:48:33.123+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r05 n=6 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.280430583 load_s=45.457958791
+time=2026-11-07T15:48:53.510+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r02 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:49:31.248+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r02 n=7 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.113745959 load_s=45.442106292
+time=2026-11-07T15:49:51.759+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r06 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:50:29.374+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r06 n=8 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.103446833 load_s=45.513524292
+time=2026-11-07T15:50:49.887+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r04 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:51:27.403+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r04 n=9 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.012276041 load_s=45.444646958
+time=2026-11-07T15:51:47.894+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r02 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:52:25.481+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r02 n=10 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.053398625 load_s=45.528318666
+time=2026-11-07T15:52:45.995+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r06 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:53:23.646+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r06 n=11 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.1459505 load_s=45.548804167
+time=2026-11-07T15:53:44.097+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r10 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:54:21.637+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r10 n=12 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.974745792 load_s=45.435501125
+time=2026-11-07T15:54:42.112+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r09 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:55:19.652+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r09 n=13 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.9923435 load_s=45.432093333
+time=2026-11-07T15:55:40.110+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r10 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:56:17.669+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r10 n=14 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.0025555 load_s=45.492770375
+time=2026-11-07T15:56:38.337+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r07 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:57:15.957+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r07 n=15 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.271849417 load_s=45.427922333
+time=2026-11-07T15:57:36.411+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r09 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:58:13.594+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r09 n=16 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.621489584 load_s=45.476247791
+time=2026-11-07T15:58:34.074+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r03 fault=proxy_disable target=pg-connect
+time=2026-11-07T15:59:11.542+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r03 n=17 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.935832 load_s=45.547051709
+time=2026-11-07T15:59:32.027+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r03 fault=proxy_disable target=pg-connect
+time=2026-11-07T16:00:09.787+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r03 n=18 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.231680125 load_s=45.450594667
+time=2026-11-07T16:00:30.337+05:30 level=INFO msg="fault injected" cycle=X-1_P4_r01 fault=proxy_disable target=pg-connect
+time=2026-11-07T16:01:07.704+05:30 level=INFO msg="cycle finished" cycle=X-1_P4_r01 n=19 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.897739791 load_s=45.538062917
+time=2026-11-07T16:01:28.209+05:30 level=INFO msg="fault injected" cycle=X-1_P5_r01 fault=proxy_disable target=pg-connect
+time=2026-11-07T16:02:05.796+05:30 level=INFO msg="cycle finished" cycle=X-1_P5_r01 n=20 of=20 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.078166708 load_s=45.450028792

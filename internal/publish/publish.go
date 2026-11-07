@@ -67,6 +67,12 @@ type requestTracer struct{}
 
 const produceKey = 0
 
+// OnProduceBatchWritten logs each batch written to a partition, so a cut can be
+// matched against what each partition had in flight.
+func (requestTracer) OnProduceBatchWritten(_ kgo.BrokerMetadata, _ string, partition int32, m kgo.ProduceBatchMetrics) {
+	slog.Info(obs.BatchWritten, "partition", partition, "records", m.NumRecords)
+}
+
 func (requestTracer) OnBrokerE2E(_ kgo.BrokerMetadata, key int16, e kgo.BrokerE2E) {
 	if key != produceKey {
 		return
@@ -109,7 +115,7 @@ func (p *Publisher) SendAsync(ctx context.Context, ev events.Event, done func(er
 	// The record must outlive the HTTP request that created it.
 	p.client.Produce(context.WithoutCancel(ctx), record, func(r *kgo.Record, err error) {
 		if err != nil {
-			slog.Error(obs.SendFailed, "event_id", ev.EventID, "error", err)
+			slog.Error(obs.SendFailed, "event_id", ev.EventID, "partition", r.Partition, "error", err)
 		} else {
 			slog.Info(obs.SendAcked, "event_id", ev.EventID, "partition", r.Partition, "offset", r.Offset)
 		}

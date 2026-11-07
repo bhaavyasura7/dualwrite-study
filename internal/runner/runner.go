@@ -72,7 +72,9 @@ var ErrControlFailed = errors.New("control assert failed")
 type Options struct {
 	RunID, GitCommit, Host, Versions string
 	Shard                            Shard
-	Strict                           bool // final runs: enforce the pre-run checklist (SPEC 14.5)
+	Strict                           bool        // final runs: enforce the pre-run checklist (SPEC 14.5)
+	FixedSeed                        bool        // trial only: every cycle uses Seed, to measure run-to-run noise
+	StopRequested                    func() bool // true once the person asked to stop after this cycle
 	Seed                             uint64
 	ResultsDir                       string
 }
@@ -152,6 +154,17 @@ func Supported(c Cycle) error {
 	return nil
 }
 
+// stopFile asks a run to stop after the current cycle (make pause).
+const stopFile = "STOP"
+
+func (r *Runner) stopRequested() bool {
+	if r.opts.StopRequested != nil && r.opts.StopRequested() {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(r.opts.ResultsDir, stopFile))
+	return err == nil
+}
+
 // minFreeDiskGB stops a run before the host disk can fill.
 const minFreeDiskGB = 20
 
@@ -201,10 +214,20 @@ func (r *Runner) Run(ctx context.Context, cycles []Cycle) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if r.stopRequested() {
+			slog.Info("stopped between cycles; rerun the same command to resume", "next", cycle.ID)
+			return nil
+		}
 		if err := r.ensureBrokers(ctx, cycle.Topology.Brokers); err != nil {
 			return fmt.Errorf("before %s: %w", cycle.ID, err)
 		}
 		row := r.runCycle(ctx, cycle)
+		if ctx.Err() != nil {
+			// Interrupted mid-cycle: not a result. It reruns on resume.
+			slog.Warn("cycle interrupted and discarded", "cycle", cycle.ID)
+			return ctx.Err()
+		}
+		row.Order = i + 1
 		if err := r.results.Append(row); err != nil {
 			return err
 		}
@@ -247,6 +270,9 @@ func failed(state string, err error) error { return &failure{"FAILED_" + state, 
 
 func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 	seed := cycleSeed(r.opts.Seed, cycle.ID)
+	if r.opts.FixedSeed {
+		seed = r.opts.Seed
+	}
 	sweep, _ := json.Marshal(cycle.Sweep)
 	env, _ := json.Marshal(cycle.Env)
 	row := Row{
@@ -296,7 +322,7 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 		return failed("START", err)
 	}
 	stopSampling := r.sampleState(ctx, cycle)
-	defer func() { run.row.WALRetainedMax, run.row.OutboxBacklogMax = stopSampling() }()
+	defer func() { run.row.WALRetainedMax, run.row.OutboxBacklogMax, damage.SlotTimeline = stopSampling() }()
 
 	// WARMUP
 	loadCtx, stopLoad := context.WithCancel(ctx)
@@ -356,6 +382,12 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	if err := r.drain(ctx, run); err != nil {
 		return failed("DRAIN", err)
 	}
+	if isCDC(cycle.Pattern) {
+		// Connect's own log explains CDC damage; keep the part from this cycle.
+		if logs, err := r.docker.LogsSince(ctx, connectContainer, run.row.StartedAt); err == nil {
+			run.logs.Write(logs)
+		}
+	}
 	for _, component := range run.components {
 		stop, cancel := context.WithTimeout(ctx, 15*time.Second)
 		err := r.docker.Stop(stop, component.Name)
@@ -377,6 +409,9 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 		return failed("CHECK", err)
 	}
 	run.row.Result, *damage = checker.Check(in)
+	if !run.row.FailoverAt.IsZero() {
+		damage.LateAfterFailover = checker.LateDeliveries(in, run.row.FailoverAt)
+	}
 	if !run.faultEnd.IsZero() {
 		if seconds, ok := checker.RecoveryS(in, run.faultEnd); ok {
 			run.row.RecoveryS = strconv.FormatFloat(seconds, 'f', 3, 64)
@@ -514,6 +549,7 @@ func (r *Runner) precheck(ctx context.Context, run *cycleRun, session *load.Sess
 	}
 	run.row.PreP99MS = session.RecentP99(precheckWindow)
 	run.row.PreHostLoad = hostLoad()
+	run.row.Thermal = thermalState()
 	var flags []string
 	if run.row.PreP99MS > r.measurement.PrecheckMaxP99MS {
 		flags = append(flags, "latency")
@@ -521,8 +557,29 @@ func (r *Runner) precheck(ctx context.Context, run *cycleRun, session *load.Sess
 	if run.row.PreHostLoad > r.measurement.PrecheckMaxHostLoad {
 		flags = append(flags, "load")
 	}
+	if run.row.Thermal != "" {
+		flags = append(flags, "thermal")
+	}
 	run.row.PreFlag = strings.Join(flags, "+")
 	return nil
+}
+
+// thermalState summarises macOS's thermal and performance warnings, or "" when
+// none is recorded. Apple Silicon reports warnings, not a CPU speed limit.
+func thermalState() string {
+	out, err := exec.Command("pmset", "-g", "therm").Output()
+	if err != nil {
+		return "unknown"
+	}
+	var states []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "No ") && strings.Contains(line, "has been recorded") {
+			continue
+		}
+		states = append(states, line)
+	}
+	return strings.Join(states, "; ")
 }
 
 // hostLoad is the Mac's one-minute load average, or 0 if unavailable.
@@ -723,7 +780,8 @@ func (r *Runner) drain(ctx context.Context, run *cycleRun) error {
 // keepEvidence stores the damage list and logs of cycles worth explaining.
 func (r *Runner) keepEvidence(run *cycleRun, damage checker.Damage) error {
 	res := run.row.Result
-	if run.row.Status == "OK" && res.Lost+res.Ghost+res.Duplicates+res.OutOfOrder == 0 {
+	diagnostic := run.cycle.Group == "X" // diagnostic vectors keep all evidence
+	if !diagnostic && run.row.Status == "OK" && res.Lost+res.Ghost+res.Duplicates+res.OutOfOrder == 0 {
 		return nil
 	}
 	damageDir := filepath.Join(r.opts.ResultsDir, "damage")

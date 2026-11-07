@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"dualwrite-study/internal/checker"
 )
 
 const connectorDir = "deploy/connect"
@@ -198,16 +200,19 @@ func (r *Runner) connectRequest(ctx context.Context, method, path string, body [
 	return payload, nil
 }
 
-// sampleState records, once a second, the most WAL retained by the cycle's slot
-// and the largest unsent outbox backlog. The returned function stops sampling and
-// gives both maxima.
-func (r *Runner) sampleState(ctx context.Context, c Cycle) func() (int64, int64) {
+// sampleState records, once a second, the most WAL retained by the cycle's slot,
+// the largest unsent outbox backlog, and every logical slot's position. The
+// returned function stops sampling and gives the results.
+func (r *Runner) sampleState(ctx context.Context, c Cycle) func() (int64, int64, []checker.SlotSample) {
 	ctx, cancel := context.WithCancel(ctx)
-	type maxima struct{ wal, backlog int64 }
-	result := make(chan maxima, 1)
+	type outcome struct {
+		wal, backlog int64
+		slots        []checker.SlotSample
+	}
+	result := make(chan outcome, 1)
 	go func() {
-		var highest maxima
-		defer func() { result <- highest }()
+		var out outcome
+		defer func() { result <- out }()
 		conn, err := pgx.Connect(ctx, r.measurement.PostgresDSN)
 		if err != nil {
 			return
@@ -219,20 +224,40 @@ func (r *Runner) sampleState(ctx context.Context, c Cycle) func() (int64, int64)
 				err := conn.QueryRow(ctx, `SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)::bigint
 					FROM pg_replication_slots WHERE slot_name = $1`, slotName(c, connector{})).Scan(&value)
 				if err == nil {
-					highest.wal = max(highest.wal, value)
+					out.wal = max(out.wal, value)
 				}
+				out.slots = append(out.slots, readSlots(ctx, conn)...)
 			}
 			if c.Pattern == "P3" {
 				err := conn.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE sent_at IS NULL`).Scan(&value)
 				if err == nil {
-					highest.backlog = max(highest.backlog, value)
+					out.backlog = max(out.backlog, value)
 				}
 			}
 		}
 	}()
-	return func() (int64, int64) {
+	return func() (int64, int64, []checker.SlotSample) {
 		cancel()
-		highest := <-result
-		return highest.wal, highest.backlog
+		out := <-result
+		return out.wal, out.backlog, out.slots
 	}
+}
+
+func readSlots(ctx context.Context, conn *pgx.Conn) []checker.SlotSample {
+	rows, err := conn.Query(ctx, `SELECT slot_name, active, COALESCE(confirmed_flush_lsn::text, ''),
+		COALESCE(restart_lsn::text, ''), pg_current_wal_lsn()::text
+		FROM pg_replication_slots WHERE slot_type = 'logical'`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var samples []checker.SlotSample
+	now := time.Now()
+	for rows.Next() {
+		sample := checker.SlotSample{Time: now}
+		if rows.Scan(&sample.Slot, &sample.Active, &sample.ConfirmedFlush, &sample.Restart, &sample.CurrentWAL) == nil {
+			samples = append(samples, sample)
+		}
+	}
+	return samples
 }
