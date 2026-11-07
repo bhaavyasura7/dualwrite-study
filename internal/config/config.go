@@ -72,6 +72,58 @@ func Load() (Config, error) {
 	return cfg, errors.Join(errs...)
 }
 
+// Measurement holds the direct connections used by the runner and checker.
+// They bypass Toxiproxy so that faults never affect measurement (SPEC 16).
+type Measurement struct {
+	PostgresDSN  string   // POSTGRES_DIRECT_DSN
+	KafkaBrokers []string // KAFKA_DIRECT_BROKERS, comma separated
+}
+
+// LoadMeasurement reads Measurement from the environment.
+func LoadMeasurement() Measurement {
+	return Measurement{
+		PostgresDSN:  str("POSTGRES_DIRECT_DSN", "postgres://app:app@localhost:55432/shop"),
+		KafkaBrokers: strings.Split(str("KAFKA_DIRECT_BROKERS", "localhost:29091"), ","),
+	}
+}
+
+// LoadGen holds the load generator settings (SPEC 15).
+type LoadGen struct {
+	Target         string        // LOAD_TARGET, default http://localhost:8080
+	Mode           string        // LOAD_MODE, constant or burst, default constant
+	Rate           int           // LOAD_RATE_PER_S, default 100
+	Duration       time.Duration // LOAD_DURATION_S, default 40
+	BurstRate      int           // LOAD_BURST_RATE_PER_S, default 10x the rate
+	BurstAt        time.Duration // LOAD_BURST_AT_S, default 10
+	BurstLength    time.Duration // LOAD_BURST_S, default 10
+	RequestTimeout time.Duration // LOAD_REQUEST_TIMEOUT_MS, default 10000
+	Seed           uint64        // LOAD_SEED, default 1
+}
+
+// LoadLoadGen reads LoadGen from the environment.
+func LoadLoadGen() (LoadGen, error) {
+	var errs []error
+	rate := integer("LOAD_RATE_PER_S", 100, &errs)
+	cfg := LoadGen{
+		Target:         str("LOAD_TARGET", "http://localhost:8080"),
+		Mode:           str("LOAD_MODE", "constant"),
+		Rate:           rate,
+		Duration:       seconds("LOAD_DURATION_S", 40, &errs),
+		BurstRate:      integer("LOAD_BURST_RATE_PER_S", 10*rate, &errs),
+		BurstAt:        seconds("LOAD_BURST_AT_S", 10, &errs),
+		BurstLength:    seconds("LOAD_BURST_S", 10, &errs),
+		RequestTimeout: millis("LOAD_REQUEST_TIMEOUT_MS", 10000, &errs),
+		Seed:           uint64(integer("LOAD_SEED", 1, &errs)),
+	}
+	if cfg.Mode != "constant" && cfg.Mode != "burst" {
+		errs = append(errs, fmt.Errorf("LOAD_MODE must be constant or burst, got %q", cfg.Mode))
+	}
+	if cfg.Rate < 1 || cfg.BurstRate < 1 {
+		errs = append(errs, errors.New("load rates must be positive"))
+	}
+	return cfg, errors.Join(errs...)
+}
+
 func str(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -93,6 +145,10 @@ func integer(key string, def int, errs *[]error) int {
 
 func millis(key string, def int, errs *[]error) time.Duration {
 	return time.Duration(integer(key, def, errs)) * time.Millisecond
+}
+
+func seconds(key string, def int, errs *[]error) time.Duration {
+	return time.Duration(integer(key, def, errs)) * time.Second
 }
 
 func boolean(key string, def bool, errs *[]error) bool {

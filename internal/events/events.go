@@ -2,6 +2,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -57,4 +58,17 @@ func typeOf(status string) (string, error) {
 		return "OrderCancelled", nil
 	}
 	return "", fmt.Errorf("unknown order status %q", status)
+}
+
+// Decode parses a Kafka record value. A value missing its identity is an error,
+// so a malformed record can never pass as damage-free.
+func Decode(value []byte) (Event, error) {
+	var ev Event
+	if err := json.Unmarshal(value, &ev); err != nil {
+		return Event{}, fmt.Errorf("decode event: %w", err)
+	}
+	if ev.OrderID == uuid.Nil || ev.Seq < 1 {
+		return Event{}, fmt.Errorf("decode event: missing order_id or seq in %q", value)
+	}
+	return ev, nil
 }

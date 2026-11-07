@@ -1,0 +1,26 @@
+{
+  "comment": "Damage to the event at the crash point is separated from everything else.",
+  "input": {
+    "db": [
+      {"order": "hook", "seq": 1}, {"order": "other", "seq": 1},
+      {"order": "dup", "seq": 1}, {"order": "hookdup", "seq": 1}
+    ],
+    "kafka": [
+      {"order": "dup", "seq": 1, "partition": 0, "offset": 0},
+      {"order": "dup", "seq": 1, "partition": 0, "offset": 1},
+      {"order": "hookdup", "seq": 1, "partition": 1, "offset": 0},
+      {"order": "hookdup", "seq": 1, "partition": 1, "offset": 1},
+      {"order": "rolledback", "seq": 1, "partition": 2, "offset": 0}
+    ],
+    "hooked": [
+      {"order": "hook", "seq": 1}, {"order": "hookdup", "seq": 1}, {"order": "rolledback", "seq": 1}
+    ],
+    "send_failed": 7
+  },
+  "want": {
+    "orders_total": 4, "events_total": 4,
+    "lost": 2, "ghost": 1, "duplicates": 2,
+    "hooked_lost": 1, "hooked_dup": 1, "hooked_ghost": 1,
+    "collateral_lost": 1, "collateral_dup": 1, "send_failed": 7
+  }
+}

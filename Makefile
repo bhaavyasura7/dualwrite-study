@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order test
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker test
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -20,6 +20,9 @@ smoke: ## verify the Milestone 1 acceptance criteria against the running stack
 
 smoke-order: ## verify the Milestone 2 acceptance criteria (P1 end to end)
 	./deploy/smoke-order.sh
+
+smoke-checker: ## verify the Milestone 3 acceptance criteria (checker on real cycles)
+	./deploy/smoke-checker.sh
 
 test:
 	go vet ./...

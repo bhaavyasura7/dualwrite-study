@@ -8,6 +8,9 @@
 |---|---|---|---|---|
 | 1 | 6.4, B-3 | Idempotent records in flight may not time out. Taken from the franz-go source, not yet seen under a real fault. | B-3 sweeps `KAFKA_IDEMPOTENT`. | Confirm at M7 |
 | 2 | 6.4 | `KAFKA_REQUEST_OVERHEAD_MS = 1000` should make hung connections visible within F-2 and F-3's 10 s fault. | Set in the publisher. | Confirm at M7 |
+| 3 | 5.3, 11.2 | The window metric needs a broker timestamp, but Kafka topics default to `CreateTime`, the producer's clock. A record delayed by retries would keep its early timestamp, so the window would be understated. | Cycle topics must set `message.timestamp.type=LogAppendTime`. The checker refuses any other topic. The runner must create topics this way. | Add to spec |
+| 4 | 11.2 | By the literal definition, a redelivered duplicate that arrives after a later version also counts as out of order. A-4 and A-7 republish whole batches, so `out_of_order` would rise from duplicates alone and blur the ordering result in B-1 and B-5. | Implemented literally; see `triple_duplicate.json`. | Needs a decision |
+| 5 | 15, P-1 | The clean cycle had p50 latency 2 ms but p99 193 ms. Cause unknown; the first requests after start are a suspect. Load has no warm-up exclusion yet. | Nothing yet. Investigate before trusting P-1 latency numbers. | M5 |
 
 ## Implementation decisions not stated in the spec
 

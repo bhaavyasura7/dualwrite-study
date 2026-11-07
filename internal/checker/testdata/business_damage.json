@@ -1,0 +1,13 @@
+{
+  "comment": "Three paid orders: naive charged one twice, dedup is exact, upsert missed one.",
+  "input": {
+    "db": [{"order": "a", "seq": 1}],
+    "kafka": [{"order": "a", "seq": 1, "partition": 0, "offset": 0}],
+    "payments": {"naive": 4, "dedup": 3, "upsert": 2},
+    "paid_orders": 3
+  },
+  "want": {
+    "orders_total": 1, "events_total": 1,
+    "business_damage": {"naive": 1, "dedup": 0, "upsert": 1}
+  }
+}

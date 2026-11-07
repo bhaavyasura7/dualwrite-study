@@ -1,0 +1,27 @@
+{
+  "comment": "2 lost, 2 duplicates, 1 out of order, 1 ghost. The duplicates are adjacent, so they do not also count as out of order.",
+  "input": {
+    "db": [
+      {"order": "lost", "seq": 1}, {"order": "lost", "seq": 2},
+      {"order": "dup", "seq": 1}, {"order": "dup", "seq": 2},
+      {"order": "swap", "seq": 1}, {"order": "swap", "seq": 2},
+      {"order": "fine", "seq": 1}
+    ],
+    "kafka": [
+      {"order": "dup", "seq": 1, "partition": 0, "offset": 0},
+      {"order": "dup", "seq": 1, "partition": 0, "offset": 1},
+      {"order": "dup", "seq": 2, "partition": 0, "offset": 2},
+      {"order": "dup", "seq": 2, "partition": 0, "offset": 3},
+      {"order": "swap", "seq": 2, "partition": 1, "offset": 0},
+      {"order": "swap", "seq": 1, "partition": 1, "offset": 1},
+      {"order": "fine", "seq": 1, "partition": 2, "offset": 0},
+      {"order": "phantom", "seq": 1, "partition": 2, "offset": 1}
+    ],
+    "sent": [{"order": "lost", "seq": 1}]
+  },
+  "want": {
+    "orders_total": 4, "events_total": 7,
+    "lost": 2, "ghost": 1, "duplicates": 2, "out_of_order": 1, "lost_after_send": 1,
+    "collateral_lost": 2, "collateral_dup": 2
+  }
+}

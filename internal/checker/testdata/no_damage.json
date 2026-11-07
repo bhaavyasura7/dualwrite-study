@@ -1,0 +1,14 @@
+{
+  "input": {
+    "db": [
+      {"order": "a", "seq": 1}, {"order": "a", "seq": 2},
+      {"order": "b", "seq": 1}
+    ],
+    "kafka": [
+      {"order": "a", "seq": 1, "partition": 0, "offset": 0},
+      {"order": "a", "seq": 2, "partition": 0, "offset": 1},
+      {"order": "b", "seq": 1, "partition": 1, "offset": 0}
+    ]
+  },
+  "want": {"orders_total": 2, "events_total": 3}
+}
