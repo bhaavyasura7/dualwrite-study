@@ -56,11 +56,11 @@ curl -fsS -X POST localhost:8474/proxies/kafka-app-b1 -d '{"enabled":true}' >/de
 
 # Host listener round trip, as the runner and checker will use it.
 topic="smoke.$id"
-kafka kafka-topics.sh --bootstrap-server localhost:29093 --create --topic "$topic" --partitions 3 >/dev/null
-echo hello | kafka kafka-console-producer.sh --bootstrap-server localhost:29093 --topic "$topic" 2>/dev/null
-got=$(kafka kafka-console-consumer.sh --bootstrap-server localhost:29093 --topic "$topic" --from-beginning --max-messages 1 --timeout-ms 15000 2>/dev/null)
+kafka kafka-topics.sh --bootstrap-server localhost:29091 --create --topic "$topic" --partitions 3 >/dev/null
+echo hello | kafka kafka-console-producer.sh --bootstrap-server localhost:29091 --topic "$topic" 2>/dev/null
+got=$(kafka kafka-console-consumer.sh --bootstrap-server localhost:29091 --topic "$topic" --from-beginning --max-messages 1 --timeout-ms 15000 2>/dev/null)
 check "kafka round trip" hello "$got"
-kafka kafka-topics.sh --bootstrap-server localhost:29093 --delete --topic "$topic" >/dev/null
+kafka kafka-topics.sh --bootstrap-server localhost:29091 --delete --topic "$topic" >/dev/null
 
 plugins=$(curl -fsS localhost:8083/connector-plugins)
 case "$plugins" in

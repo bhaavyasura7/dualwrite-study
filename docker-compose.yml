@@ -62,8 +62,8 @@ services:
       # CONNECT need separate ports or Connect would be sent to the app proxy.
       # HOST is for the runner and checker, which run on the Mac and cannot
       # resolve the INTERNAL address; it keeps measurement outside every fault.
-      KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29093,CONTROLLER://:9091
-      KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19091,INTERNAL://broker-1:9093,CONNECT://toxiproxy:19191,HOST://localhost:29093
+      KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29091,CONTROLLER://:9091
+      KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19091,INTERNAL://broker-1:9093,CONNECT://toxiproxy:19191,HOST://localhost:29091
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: APP:PLAINTEXT,INTERNAL:PLAINTEXT,CONNECT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -73,9 +73,9 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
     ports:
-      - "29093:29093"
+      - "29091:29091"
     healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29093"]
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29091"]
       interval: 5s
       timeout: 15s
       retries: 30
@@ -122,6 +122,34 @@ services:
       timeout: 5s
       retries: 40
       start_period: 15s
+
+  # Started by hand here; the runner creates these itself from Milestone 5.
+  orderservice:
+    profiles: [app]
+    build:
+      context: .
+      args:
+        CMD: orderservice
+    image: dualwrite/orderservice:dev
+    init: true
+    mem_limit: 256m
+    environment:
+      CYCLE_ID: ${CYCLE_ID:-manual}
+      PATTERN: ${PATTERN:-P1}
+      KAFKA_ACKS: ${KAFKA_ACKS:-all}
+      KAFKA_IDEMPOTENT: ${KAFKA_IDEMPOTENT:-true}
+      KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-5}
+      KAFKA_SYNC_SEND: ${KAFKA_SYNC_SEND:-false}
+      KAFKA_REQUEST_OVERHEAD_MS: ${KAFKA_REQUEST_OVERHEAD_MS:-1000}
+      CRASH_AT: ${CRASH_AT:-}
+      CRASH_AFTER_N: ${CRASH_AFTER_N:-50}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
 volumes:
   pg-primary:

@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 1.1 · November 2026"
+subtitle: "Go implementation · version 1.2 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -265,10 +265,18 @@ A thin wrapper around `kgo.Client` with settings taken from config, never defaul
 | Sync vs async send | `KAFKA_SYNC_SEND` | A-8 control |
 | Request timeout | `KAFKA_REQUEST_TIMEOUT_MS` (`kgo.ProduceRequestTimeout`) | F-1, F-2 |
 | Delivery timeout | `KAFKA_DELIVERY_TIMEOUT_MS` (`kgo.RecordDeliveryTimeout`) | A-3, B-3, C-1 |
+| Request timeout overhead | `KAFKA_REQUEST_OVERHEAD_MS` (`kgo.RequestTimeoutOverhead`, default 1000 here; library default 10 s) | F-2, F-3 |
 
 It logs three markers per event (Section 13): `SENT_CALLED` when `Produce` is called, `SEND_ACKED` in the promise callback on success, `SEND_FAILED` on error. These markers distinguish loss before sending from loss in the producer buffer.
 
 **Client-internal retries:** franz-go retries failed produce requests itself. A record only fails back to the application once `KAFKA_DELIVERY_TIMEOUT_MS` expires, so P2's application-level retries start only after that. Always set the delivery timeout explicitly; with the library default the P2 retry path may never run.
+
+**franz-go behaviours the paper must report** (from the library source; to be confirmed under real faults):
+
+- *Hung connections are detected late.* The client waits request timeout + overhead before giving up on a connection; with the library's 10 s overhead a 5 s withheld response would go unnoticed. Hence `KAFKA_REQUEST_OVERHEAD_MS = 1000`.
+- *Idempotent records in flight cannot time out.* With idempotence on, a record already sent and awaiting a response is not failed by the delivery timeout (failing it would break the sequence numbers). B-3 therefore sweeps `KAFKA_IDEMPOTENT`.
+- *acks=1 requires idempotence off.* C-4 runs every cell with idempotence off so that only `acks` differs.
+- *One timeout fails the partition's whole buffer.* When one record times out, franz-go fails every record buffered for that partition, to preserve ordering. P1/P2 losses under broker outages are therefore batch-sized; the checker counts `SEND_FAILED` markers per cycle (`send_failed`) so the paper can show it.
 
 ## 6.5 Graceful shutdown
 
@@ -384,7 +392,7 @@ Worker settings only take effect when Kafka Connect is recreated, so the runner 
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "plugin.name": "pgoutput",
-    "database.hostname": "toxiproxy", "database.port": "15432",
+    "database.hostname": "toxiproxy", "database.port": "15433",
     "database.user": "app", "database.password": "app", "database.dbname": "shop",
     "slot.name": "slot_{{cycle_slug}}",
     "publication.name": "pub_outbox",
@@ -543,6 +551,8 @@ RESET → START → WARMUP → FAULT → RECOVER → DRAIN → CHECK → RECORD 
 
 Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one bad cycle never stops the run. A violated control `assert` marks `CONTROL_FAIL` and **does** stop the run. The runner is resumable: it skips cycles already present in `results.csv`.
 
+**Sharding.** `--shard i/n` runs only the cycles whose `hash(cycle_id) mod n = i-1`, so n laptops split the catalogue with no overlap, and each writes `results/results.<host>.csv`. All laptops must use the same git commit and image digests (checked at start and recorded in every row). Performance vectors (`group: perf`) are never sharded: they run on one designated machine.
+
 **Run-time budget.** At an assumed ~75 s of fixed overhead per cycle (reset, start, drain, check), the catalogue needs about 1,800 cycles / ~80 h for `must`, ~1,300 / ~50 h for `should`, and ~400 / ~20 h for `optional`. Measure the real overhead in Milestone 5 and re-plan. Correctness runs can be split across team laptops with identical pinned stacks; performance runs (P-1) stay on one machine.
 
 ## 14.3 Results CSV (one row per cycle)
@@ -553,7 +563,7 @@ status, sweep_json, versions_json, load_rate, orders_total, events_total,
 lost, ghost, duplicates, out_of_order, lost_after_send,
 hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
-wal_retained_bytes_max, git_commit,
+wal_retained_bytes_max, send_failed, host, shard, git_commit,
 window_p50_ms, window_p99_ms, window_max_ms, recovery_s,
 throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, started_at, finished_at
 ```
@@ -566,7 +576,9 @@ Every row carries the random seed and the pinned versions so any cycle can be re
 make up                    # docker compose up the base stack
 make test                  # unit tests incl. checker golden tests (C0-2)
 make run VECTORS=A-1,A-4   # run selected vectors
-make run-all               # full catalogue (overnight; use caffeinate -i on macOS)
+make run-all               # full catalogue (multi-day; use caffeinate -i on macOS)
+make run-all SHARD=2/4     # this laptop's share of the catalogue (see below)
+make merge                 # combine results/*.csv from all laptops into results.csv
 make report                # run analysis scripts → figures/
 ```
 
@@ -586,13 +598,13 @@ damage by pattern × fault (bars with 95% confidence intervals), a pattern × fa
 
 | Group | Proxy (listen → upstream) | Used by |
 |---|---|---|
-| `pg-app` | 15432 → primary:5432 | order service, relay, consumers, checker |
+| `pg-app` | 15432 → primary:5432 | order service, relay, consumers |
 | `pg-connect` | 15433 → primary:5432 | Kafka Connect |
-| `kafka-app` | 1909N → broker-N:9092, one per broker | order service, relay, consumers |
-| `kafka-connect` | 1919N → broker-N:9092, one per broker | Kafka Connect |
+| `kafka-app` | 1909N → broker-N:9092 (`APP` listener), one per broker | order service, relay, consumers |
+| `kafka-connect` | 1919N → broker-N:9094 (`CONNECT` listener), one per broker | Kafka Connect |
 
-- Clients connect to whatever address each broker **advertises**, so a single proxy cannot front three brokers. Each broker advertises two listeners, one per client class (`APP://toxiproxy:1909N`, `CONNECT://toxiproxy:1919N`), and each client group bootstraps on its own listener name. Without this, clients bypass Toxiproxy after the first metadata request.
-- The checker and runner reach Kafka on a third, direct listener (`INTERNAL://broker-N:9093`) so faults never affect measurement.
+- Clients connect to whatever address each broker **advertises**, so a single proxy cannot front three brokers. Each client class needs its **own broker listener and port**: `APP` on 9092 advertising `toxiproxy:1909N`, `CONNECT` on 9094 advertising `toxiproxy:1919N`. If both proxies pointed at 9092, the broker would advertise the app proxy to Connect and app-side faults would hit CDC too.
+- Measurement never goes through Toxiproxy: the checker and runner read Postgres directly and reach Kafka on `INTERNAL` (9093, in-network) or `HOST` (published to the Mac as `localhost:2909N`, because the host cannot resolve `broker-N`).
 - Kafka Connect uses its own internal topics (`connect-configs`, `connect-offsets`, `connect-status`), which are **not** reset per cycle; per-cycle connector names and slots keep cycles isolated.
 
 # 17. Testing the harness itself
@@ -617,7 +629,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 6 | P2–P5 | All patterns pass C0-1 (one hour, zero damage) |
 | 7 | Faults | Every fault type injects and recovers within its timeout |
 | 8 | Consumers | Three strategies pass a no-fault run; G-1 shows the expected naive duplicates |
-| 9 | Full catalogue | Must-run vectors complete overnight with < 2% FAILED cycles |
+| 9 | Full catalogue | Must-run vectors complete across several nights and laptops (`SHARD=i/n`) with < 2% FAILED cycles, and `make merge` produces one `results.csv` |
 | 10 | Analysis | `make report` regenerates all figures from `results.csv` |
 
 # 19. Conventions
@@ -627,7 +639,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in version 1.1
+# 20. Changes in versions 1.1 and 1.2
 
 | # | Area | Change |
 |---|---|---|
@@ -650,3 +662,8 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 17 | 6.4, 6.5 | Explicit delivery timeout (P2 retries depend on it); SIGTERM handling required for C0-3 |
 | 18 | 11.1 | After failover the promoted replica is the source of truth |
 | 19 | 14.2 | Run-time budget and controls that stop the run on failure |
+| 20 | 16 | (1.2) Kafka Connect gets its own broker listener on 9094; `HOST` listener for the Mac; checker reads Postgres directly |
+| 21 | 6.4 | (1.2) `KAFKA_REQUEST_OVERHEAD_MS`; documented franz-go behaviours (late hang detection, idempotent in-flight records, acks=1 needs idempotence off, partition-wide buffer failure) |
+| 22 | 9.3 | (1.2) P4/P5 connector uses the `pg-connect` port 15433 |
+| 23 | 14.2, 14.4, 18 | (1.2) Sharding across laptops, `make merge`, Milestone 9 reworded |
+| 24 | 14.3 | (1.2) CSV columns `send_failed`, `host`, `shard` |

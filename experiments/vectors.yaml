@@ -1,6 +1,6 @@
 # =============================================================================
 # Test catalogue — Fault-Injection Study of Database–Kafka Consistency Patterns
-# File: experiments/vectors.yaml   ·   Spec version 1.1   ·   November 2026
+# File: experiments/vectors.yaml   ·   Spec version 1.2   ·   November 2026
 # =============================================================================
 #
 # SCHEMA
@@ -102,6 +102,7 @@ defaults:
     KAFKA_SYNC_SEND: false
     KAFKA_REQUEST_TIMEOUT_MS: 3000
     KAFKA_DELIVERY_TIMEOUT_MS: 5000
+    KAFKA_REQUEST_OVERHEAD_MS: 1000       # franz-go default is 10000; see SPEC 6.4
     TOPIC_PARTITIONS: 3
     TOPIC_RF: 1
     TOPIC_MIN_ISR: 1
@@ -280,7 +281,8 @@ vectors:
     patterns: [P1, P2]
     faults:
       - { type: pause, target: orderservice, at_s: [5, 30], duration_s: [6, 10] }
-    expect: Records time out while paused although the broker stored them; P2's retries duplicate them.
+    sweep: { KAFKA_IDEMPOTENT: [true, false] }
+    expect: Idempotence off - records time out although the broker stored them and P2 duplicates them. Idempotence on - in-flight records cannot time out, so no retry path (SPEC 6.4).
 
   - id: B-4
     group: B
@@ -353,8 +355,10 @@ vectors:
     env: { TOPIC_RF: 3, TOPIC_MIN_ISR: 2 }
     faults:
       - { type: kill_leader, target: partition-0-leader, at_s: [10, 30] }
-    sweep: { KAFKA_ACKS: ["1", all] }
-    expect: acks=1 loses acknowledged events on leader failover; acks=all loses none. (P4/P5 via producer.override.acks.)
+    cells:
+      - { KAFKA_ACKS: "1", KAFKA_IDEMPOTENT: false }
+      - { KAFKA_ACKS: all, KAFKA_IDEMPOTENT: false }
+    expect: Only acks differs between cells (acks=1 requires idempotence off). acks=1 loses acknowledged events on leader failover; acks=all loses none. (P4/P5 via producer.override.acks.)
 
   # ---------------------------------------------------------------------------
   # D. DATABASE FAILOVER  (truth = the surviving, promoted database)
@@ -471,7 +475,7 @@ vectors:
     patterns: [P1, P2, P3]
     env: { KAFKA_IDEMPOTENT: false }
     faults:
-      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 5 }
+      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 10 }
     expect: Lost acknowledgements cause retries of stored records -> duplicates.
 
   - id: F-3
@@ -481,7 +485,7 @@ vectors:
     patterns: [P1, P2, P3]
     env: { KAFKA_IDEMPOTENT: true }
     faults:
-      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 5 }
+      - { type: withhold_downstream, target: kafka-app, at_s: [10, 20], duration_s: 10 }
     expect: Idempotent producer removes the duplicates seen in F-2 (same session). Compare with F-2.
 
   - id: F-3b
