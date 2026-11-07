@@ -11,6 +11,7 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -101,6 +102,64 @@ func (d *Docker) Stop(ctx context.Context, name string) error {
 		return fmt.Errorf("stop %s: %w", name, err)
 	}
 	return nil
+}
+
+// Kill sends SIGKILL.
+func (d *Docker) Kill(ctx context.Context, name string) error { return d.Signal(ctx, name, "SIGKILL") }
+
+// Start starts a stopped container.
+func (d *Docker) Start(ctx context.Context, name string) error {
+	if err := d.cli.ContainerStart(ctx, name, container.StartOptions{}); err != nil {
+		return fmt.Errorf("start %s: %w", name, err)
+	}
+	return nil
+}
+
+// Restart restarts the container gracefully.
+func (d *Docker) Restart(ctx context.Context, name string) error {
+	if err := d.cli.ContainerRestart(ctx, name, container.StopOptions{}); err != nil {
+		return fmt.Errorf("restart %s: %w", name, err)
+	}
+	return nil
+}
+
+// Pause freezes the container.
+func (d *Docker) Pause(ctx context.Context, name string) error {
+	if err := d.cli.ContainerPause(ctx, name); err != nil {
+		return fmt.Errorf("pause %s: %w", name, err)
+	}
+	return nil
+}
+
+// Unpause resumes the container.
+func (d *Docker) Unpause(ctx context.Context, name string) error {
+	if err := d.cli.ContainerUnpause(ctx, name); err != nil {
+		return fmt.Errorf("unpause %s: %w", name, err)
+	}
+	return nil
+}
+
+// ConnectAlias joins the container to a network under an extra name.
+func (d *Docker) ConnectAlias(ctx context.Context, networkName, name, alias string) error {
+	settings := &network.EndpointSettings{Aliases: []string{alias}}
+	if err := d.cli.NetworkConnect(ctx, networkName, name, settings); err != nil {
+		return fmt.Errorf("connect %s to %s: %w", name, networkName, err)
+	}
+	return nil
+}
+
+// EnvValue reads one variable from the container's configuration.
+func (d *Docker) EnvValue(ctx context.Context, name, key string) (string, error) {
+	info, err := d.cli.ContainerInspect(ctx, name)
+	if err != nil {
+		return "", fmt.Errorf("inspect %s: %w", name, err)
+	}
+	for _, pair := range info.Config.Env {
+		if value, ok := strings.CutPrefix(pair, key+"="); ok {
+			return value, nil
+		}
+	}
+	return "", nil
 }
 
 // Logs returns everything the container has written.

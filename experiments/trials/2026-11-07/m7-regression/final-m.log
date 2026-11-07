@@ -1,0 +1,7 @@
+time=2026-11-07T13:23:06.226+05:30 level=INFO msg="run started" cycles=3 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/m7m.csv
+time=2026-11-07T13:23:06.228+05:30 level=INFO msg="switching broker count" from=3 to=1
+time=2026-11-07T13:24:08.437+05:30 level=INFO msg="cycle finished" cycle=A-1_P1_r01 n=1 of=3 status=OK lost=1 hooked_lost=1 inflight=0 cycle_s=41.805314375 load_s=31.109989125
+time=2026-11-07T13:24:48.707+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T13:25:28.420+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r01 n=2 of=3 status=OK lost=84 hooked_lost=0 inflight=0 cycle_s=73.491946584 load_s=61.253406916
+time=2026-11-07T13:25:55.035+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r02 fault=failover target=postgres
+time=2026-11-07T13:26:34.809+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r02 n=3 of=3 status=OK lost=155 hooked_lost=0 inflight=0 cycle_s=59.360890041 load_s=48.068544125

@@ -2,6 +2,38 @@
 # results are only comparable within one pinned stack.
 name: dualwrite
 
+x-broker: &broker
+  image: apache/kafka:4.3.2
+  init: true
+  mem_limit: 1536m
+
+x-broker-health: &broker-health
+  interval: 5s
+  timeout: 15s
+  retries: 30
+  start_period: 10s
+
+x-broker-env: &broker-env
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_CONTROLLER_QUORUM_VOTERS: ${KAFKA_VOTERS:-1@broker-1:9091}
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  # One listener per client class (SPEC 16). A broker answers metadata with the
+  # advertised address of the listener the client arrived on, so APP and CONNECT
+  # need separate ports or Connect would be sent to the app proxy. HOST is for the
+  # runner and checker, which run on the Mac and cannot resolve the INTERNAL
+  # address; it keeps measurement outside every fault.
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: APP:PLAINTEXT,INTERNAL:PLAINTEXT,CONNECT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_INTERNAL_RF:-1}
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: ${KAFKA_INTERNAL_RF:-1}
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  # Every topic is created explicitly, so a wrong topic name fails loudly.
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  # On a volume: recreating a broker must not wipe Connect's internal topics.
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  KAFKA_HEAP_OPTS: ${KAFKA_HEAP:--Xms512m -Xmx1g}
+
 services:
   postgres-primary:
     image: postgres:16.15-bookworm
@@ -41,6 +73,8 @@ services:
     depends_on:
       postgres-primary:
         condition: service_healthy
+      toxiproxy-pg:
+        condition: service_started
     healthcheck:
       test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "app", "-d", "shop"]
       interval: 2s
@@ -48,42 +82,51 @@ services:
       retries: 60
 
   broker-1:
-    image: apache/kafka:4.3.2
-    init: true
-    mem_limit: 1536m
+    <<: *broker
     environment:
+      <<: *broker-env
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker-1:9091
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      # One listener per client class (SPEC 16). A broker answers metadata with
-      # the advertised address of the listener the client arrived on, so APP and
-      # CONNECT need separate ports or Connect would be sent to the app proxy.
-      # HOST is for the runner and checker, which run on the Mac and cannot
-      # resolve the INTERNAL address; it keeps measurement outside every fault.
       KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29091,CONTROLLER://:9091
       KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19091,INTERNAL://broker-1:9093,CONNECT://toxiproxy:19191,HOST://localhost:29091
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: APP:PLAINTEXT,INTERNAL:PLAINTEXT,CONNECT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      # Every topic is created explicitly, so a wrong topic name fails loudly.
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      # On a volume: recreating the broker must not wipe Connect's internal topics.
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
     ports:
       - "29091:29091"
     volumes:
-      - kafka-1:/var/lib/kafka/data
+      - ${KAFKA_VOLUME_1:-kafka-1}:/var/lib/kafka/data
     healthcheck:
+      <<: *broker-health
       test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29091"]
-      interval: 5s
-      timeout: 15s
-      retries: 30
-      start_period: 10s
+
+  broker-2:
+    <<: *broker
+    profiles: [brokers3]
+    environment:
+      <<: *broker-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29092,CONTROLLER://:9091
+      KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19092,INTERNAL://broker-2:9093,CONNECT://toxiproxy:19192,HOST://localhost:29092
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka-b3-2:/var/lib/kafka/data
+    healthcheck:
+      <<: *broker-health
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29092"]
+
+  broker-3:
+    <<: *broker
+    profiles: [brokers3]
+    environment:
+      <<: *broker-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: APP://:9092,INTERNAL://:9093,CONNECT://:9094,HOST://:29093,CONTROLLER://:9091
+      KAFKA_ADVERTISED_LISTENERS: APP://toxiproxy:19093,INTERNAL://broker-3:9093,CONNECT://toxiproxy:19193,HOST://localhost:29093
+    ports:
+      - "29093:29093"
+    volumes:
+      - kafka-b3-3:/var/lib/kafka/data
+    healthcheck:
+      <<: *broker-health
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29093"]
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.13.0
@@ -95,21 +138,38 @@ services:
     volumes:
       - ./deploy/toxiproxy.json:/config/toxiproxy.json:ro
 
+  # Postgres has its own instance. Toxiproxy dials upstream inside its accept loop,
+  # so one dial to a dead address blocks every new client. This instance is
+  # restarted at failover, which clears that without touching Kafka traffic.
+  # The replica joins `failover` with the alias postgres-primary, so the proxies
+  # reach it by the name they already use.
+  toxiproxy-pg:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    init: true
+    mem_limit: 256m
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    networks: [default, failover]
+    ports:
+      - "8475:8474"
+    volumes:
+      - ./deploy/toxiproxy-pg.json:/config/toxiproxy.json:ro
+
   kafka-connect:
     image: quay.io/debezium/connect:3.7.0.Final
     init: true
     mem_limit: 1536m
     environment:
-      BOOTSTRAP_SERVERS: toxiproxy:19191
-      GROUP_ID: connect-study
-      CONFIG_STORAGE_TOPIC: connect-configs
-      OFFSET_STORAGE_TOPIC: connect-offsets
-      STATUS_STORAGE_TOPIC: connect-status
-      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
-      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
-      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      BOOTSTRAP_SERVERS: ${CONNECT_BOOTSTRAP:-toxiproxy:19191}
+      GROUP_ID: connect-study${CONNECT_TOPIC_SUFFIX:-}
+      CONFIG_STORAGE_TOPIC: connect-configs${CONNECT_TOPIC_SUFFIX:-}
+      OFFSET_STORAGE_TOPIC: connect-offsets${CONNECT_TOPIC_SUFFIX:-}
+      STATUS_STORAGE_TOPIC: connect-status${CONNECT_TOPIC_SUFFIX:-}
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: ${CONNECT_RF:-1}
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: ${CONNECT_RF:-1}
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: ${CONNECT_RF:-1}
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
-      CONNECT_OFFSET_FLUSH_INTERVAL_MS: ${OFFSET_FLUSH_MS:-60000}
+      # The image's entrypoint overwrites CONNECT_OFFSET_FLUSH_INTERVAL_MS from this.
+      OFFSET_FLUSH_INTERVAL_MS: ${OFFSET_FLUSH_MS:-60000}
       CONNECT_EXACTLY_ONCE_SOURCE_SUPPORT: ${CONNECT_EOS_WORKER:-disabled}
       CONNECT_CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY: All
       HEAP_OPTS: -Xms512m -Xmx1g
@@ -119,6 +179,8 @@ services:
       broker-1:
         condition: service_healthy
       toxiproxy:
+        condition: service_started
+      toxiproxy-pg:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8083/connector-plugins"]
@@ -166,7 +228,15 @@ services:
         CMD: relay
     image: dualwrite/relay:dev
 
+networks:
+  failover:
+
 volumes:
   pg-primary:
   pg-replica:
+  # One set per topology: the quorum is fixed when storage is formatted, and
+  # one-broker state must never leak into the three-broker stack.
   kafka-1:
+  kafka-b3-1:
+  kafka-b3-2:
+  kafka-b3-3:

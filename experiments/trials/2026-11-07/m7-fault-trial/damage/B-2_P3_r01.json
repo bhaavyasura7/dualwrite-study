@@ -1,0 +1,675 @@
+{
+  "lost": null,
+  "ghost": null,
+  "duplicates": [
+    {
+      "order": "0375136a-d9a3-4e31-a316-9718000cde97",
+      "seq": 1
+    },
+    {
+      "order": "09311699-bd87-42d8-ad5b-3dc6210e174b",
+      "seq": 1
+    },
+    {
+      "order": "166cd8ff-a561-4607-8d9c-2993cdff1a9d",
+      "seq": 2
+    },
+    {
+      "order": "19565b40-a52d-4427-9fc3-8096ebe23c8f",
+      "seq": 1
+    },
+    {
+      "order": "26e27f7d-0866-4cd5-82a8-35c303c986fe",
+      "seq": 1
+    },
+    {
+      "order": "26e27f7d-0866-4cd5-82a8-35c303c986fe",
+      "seq": 2
+    },
+    {
+      "order": "2fdad16b-28cd-4904-8b9d-381cc0181fa9",
+      "seq": 1
+    },
+    {
+      "order": "2fdad16b-28cd-4904-8b9d-381cc0181fa9",
+      "seq": 2
+    },
+    {
+      "order": "3190753a-d5c7-4137-a62f-0aec9c6ee73a",
+      "seq": 1
+    },
+    {
+      "order": "32a19c0c-67cc-4157-9286-e4d491694482",
+      "seq": 1
+    },
+    {
+      "order": "32a19c0c-67cc-4157-9286-e4d491694482",
+      "seq": 2
+    },
+    {
+      "order": "3f6b2fe7-9a4c-41af-9765-98ef4afa2151",
+      "seq": 1
+    },
+    {
+      "order": "40e4e9b8-3966-4576-9b8a-dd4a107c2567",
+      "seq": 2
+    },
+    {
+      "order": "40f1c9c1-1b88-49c4-b110-3873eac9f3f8",
+      "seq": 1
+    },
+    {
+      "order": "40f1c9c1-1b88-49c4-b110-3873eac9f3f8",
+      "seq": 2
+    },
+    {
+      "order": "450b8539-ee3f-4996-9e4d-c39a8fa58652",
+      "seq": 1
+    },
+    {
+      "order": "497eec7c-0149-4c2f-8e96-09beb86a9214",
+      "seq": 1
+    },
+    {
+      "order": "497eec7c-0149-4c2f-8e96-09beb86a9214",
+      "seq": 2
+    },
+    {
+      "order": "4f390228-be6a-4b9e-bde9-2a51a7267b4f",
+      "seq": 2
+    },
+    {
+      "order": "50d74612-3408-40e0-8ef5-fe7a29bc272c",
+      "seq": 2
+    },
+    {
+      "order": "5a08a3f6-3c43-490b-9df6-30f642d20a15",
+      "seq": 1
+    },
+    {
+      "order": "5ae8d3a8-dfe2-47a2-a071-a9817205121d",
+      "seq": 2
+    },
+    {
+      "order": "5c247f0c-8d62-4cdd-8beb-14005e6d49d9",
+      "seq": 1
+    },
+    {
+      "order": "5d1f4e4f-5fbe-46f6-a3cf-f0ed0805d482",
+      "seq": 2
+    },
+    {
+      "order": "5d46510c-9813-44e7-9517-b8f2fcdf50e6",
+      "seq": 1
+    },
+    {
+      "order": "5dec80bc-640a-4405-8bf1-d6ec93515cc9",
+      "seq": 2
+    },
+    {
+      "order": "6218d10e-8b28-4172-a80b-11a7ebc0dace",
+      "seq": 1
+    },
+    {
+      "order": "6218d10e-8b28-4172-a80b-11a7ebc0dace",
+      "seq": 2
+    },
+    {
+      "order": "6bd6fd74-1c91-4310-86a2-c5f4aa856749",
+      "seq": 1
+    },
+    {
+      "order": "6bd6fd74-1c91-4310-86a2-c5f4aa856749",
+      "seq": 2
+    },
+    {
+      "order": "6d65d9a6-2dff-4f73-944a-f1e25415bb6f",
+      "seq": 1
+    },
+    {
+      "order": "6d7c01ed-9e2e-40f3-bbb9-f6572cdd72b0",
+      "seq": 1
+    },
+    {
+      "order": "6d7c01ed-9e2e-40f3-bbb9-f6572cdd72b0",
+      "seq": 2
+    },
+    {
+      "order": "702e732a-1509-4d87-a920-3c40baa9b3b0",
+      "seq": 1
+    },
+    {
+      "order": "73928d2b-fbde-4311-8d0c-7cdc37dd6b78",
+      "seq": 1
+    },
+    {
+      "order": "76eda8f5-b8dc-4a13-8cc6-67badf879286",
+      "seq": 1
+    },
+    {
+      "order": "778983b2-0ebb-4593-94e8-fbb038b0abb4",
+      "seq": 2
+    },
+    {
+      "order": "78cea9a3-5019-45ed-8338-d38c90c0b0e8",
+      "seq": 1
+    },
+    {
+      "order": "7d576fa0-c853-44cb-98ce-3b7945c4a73b",
+      "seq": 1
+    },
+    {
+      "order": "7d576fa0-c853-44cb-98ce-3b7945c4a73b",
+      "seq": 2
+    },
+    {
+      "order": "7e15df05-14ec-4226-ba8e-5929450404b9",
+      "seq": 2
+    },
+    {
+      "order": "819745bc-e1b4-4c34-a6d8-155d586b1b10",
+      "seq": 1
+    },
+    {
+      "order": "819745bc-e1b4-4c34-a6d8-155d586b1b10",
+      "seq": 2
+    },
+    {
+      "order": "81b5323d-8bc2-48ce-888a-52994820be79",
+      "seq": 1
+    },
+    {
+      "order": "85a72e04-1bc7-45a8-bb24-dea3702df611",
+      "seq": 2
+    },
+    {
+      "order": "89f0a313-45bf-488a-92a1-76d940dd71d7",
+      "seq": 1
+    },
+    {
+      "order": "8a711a6e-0ce5-4e04-a2a7-c8e69ebdd4ad",
+      "seq": 1
+    },
+    {
+      "order": "8b78e7bc-9718-4a0d-aba8-76c1f9093f01",
+      "seq": 2
+    },
+    {
+      "order": "8ca93cf9-fad0-40aa-8407-e0d735c0fdce",
+      "seq": 1
+    },
+    {
+      "order": "91e77d41-51f9-41b8-9733-5bee03b8040f",
+      "seq": 1
+    },
+    {
+      "order": "94af5cbf-5483-42f7-a157-74378551eb36",
+      "seq": 1
+    },
+    {
+      "order": "94fed38f-566b-49a3-b0bd-335042b6cf1b",
+      "seq": 1
+    },
+    {
+      "order": "988fa586-9ee7-4527-b1b6-24ffdd70e59e",
+      "seq": 2
+    },
+    {
+      "order": "9e0ad738-03e4-464e-adbd-d8272366487e",
+      "seq": 2
+    },
+    {
+      "order": "9e653a79-87b6-47bf-b9d1-8d0669c6faa4",
+      "seq": 1
+    },
+    {
+      "order": "a15da263-7361-48b2-ba2e-804714da1ca9",
+      "seq": 1
+    },
+    {
+      "order": "a15da263-7361-48b2-ba2e-804714da1ca9",
+      "seq": 2
+    },
+    {
+      "order": "aa843e04-daa6-4239-9984-899f6f83f068",
+      "seq": 2
+    },
+    {
+      "order": "ab3f3234-29b7-410b-8797-5735f6a3dc26",
+      "seq": 2
+    },
+    {
+      "order": "adb6821f-a875-4afa-adf3-5d771ef8979e",
+      "seq": 1
+    },
+    {
+      "order": "adb6821f-a875-4afa-adf3-5d771ef8979e",
+      "seq": 2
+    },
+    {
+      "order": "ae7fc797-4fd8-49c8-beac-8c875cebbed6",
+      "seq": 1
+    },
+    {
+      "order": "ae7fc797-4fd8-49c8-beac-8c875cebbed6",
+      "seq": 2
+    },
+    {
+      "order": "b195ea7d-a245-4b43-ad01-5c38980f33bf",
+      "seq": 1
+    },
+    {
+      "order": "b195ea7d-a245-4b43-ad01-5c38980f33bf",
+      "seq": 2
+    },
+    {
+      "order": "b1af2b9a-1a15-4374-bd4d-02e7c69c6ca6",
+      "seq": 2
+    },
+    {
+      "order": "b1c5f1f8-7301-461d-83eb-ec9dc02b312b",
+      "seq": 2
+    },
+    {
+      "order": "b93ba394-ad92-4107-a26a-184eb964799c",
+      "seq": 2
+    },
+    {
+      "order": "bff21655-99de-4407-bb33-52641f808056",
+      "seq": 1
+    },
+    {
+      "order": "c15ad5ca-7ccd-4fbf-bce5-0011ca6baa8b",
+      "seq": 1
+    },
+    {
+      "order": "c3559395-747e-4a6d-9b42-a9e70c9d0202",
+      "seq": 1
+    },
+    {
+      "order": "c3559395-747e-4a6d-9b42-a9e70c9d0202",
+      "seq": 2
+    },
+    {
+      "order": "ca9761e0-e2e2-4b61-935c-3745362c723a",
+      "seq": 1
+    },
+    {
+      "order": "cda7026f-47e9-4b50-9871-9bf70712b9b4",
+      "seq": 2
+    },
+    {
+      "order": "cf696315-0e39-42e4-9d80-c2b8beecbcf6",
+      "seq": 1
+    },
+    {
+      "order": "d2b5a403-1b7f-4324-9827-71ce8134bc9d",
+      "seq": 1
+    },
+    {
+      "order": "d7614d7d-5db2-476b-8453-f7095bd8df8d",
+      "seq": 1
+    },
+    {
+      "order": "d7614d7d-5db2-476b-8453-f7095bd8df8d",
+      "seq": 2
+    },
+    {
+      "order": "d79f323a-2eb9-422c-b5d2-7e240d13d2f8",
+      "seq": 2
+    },
+    {
+      "order": "e2d300cc-57d7-4ee0-99e3-5a734eb3fe13",
+      "seq": 1
+    },
+    {
+      "order": "e729ed5f-520d-47ce-ae8a-4fa679f154aa",
+      "seq": 2
+    },
+    {
+      "order": "e976049b-b533-4daa-ad61-8cf8279fd63d",
+      "seq": 2
+    },
+    {
+      "order": "e99af671-8287-4d51-8571-dcbe5a089904",
+      "seq": 1
+    },
+    {
+      "order": "ec329a5a-81dc-4c06-b3a6-ad753d47764d",
+      "seq": 2
+    },
+    {
+      "order": "f060e84b-d7f8-4f59-9bb2-87ca9a753840",
+      "seq": 2
+    },
+    {
+      "order": "f1214c1b-9d31-4fd5-934d-ac70632e95d2",
+      "seq": 1
+    },
+    {
+      "order": "f1214c1b-9d31-4fd5-934d-ac70632e95d2",
+      "seq": 2
+    },
+    {
+      "order": "f946a4fa-feb7-46c1-a96a-0255cf28d4b9",
+      "seq": 2
+    },
+    {
+      "order": "f951d02f-0325-4ad5-831f-7da5a2f2fc9f",
+      "seq": 1
+    }
+  ],
+  "out_of_order": [
+    {
+      "order": "0375136a-d9a3-4e31-a316-9718000cde97",
+      "seq": 1
+    },
+    {
+      "order": "8ca93cf9-fad0-40aa-8407-e0d735c0fdce",
+      "seq": 1
+    },
+    {
+      "order": "19565b40-a52d-4427-9fc3-8096ebe23c8f",
+      "seq": 1
+    },
+    {
+      "order": "d2b5a403-1b7f-4324-9827-71ce8134bc9d",
+      "seq": 1
+    },
+    {
+      "order": "81b5323d-8bc2-48ce-888a-52994820be79",
+      "seq": 1
+    },
+    {
+      "order": "ca9761e0-e2e2-4b61-935c-3745362c723a",
+      "seq": 1
+    },
+    {
+      "order": "89f0a313-45bf-488a-92a1-76d940dd71d7",
+      "seq": 1
+    },
+    {
+      "order": "b0245db5-a65f-4eb9-b419-aa85087fe587",
+      "seq": 1
+    },
+    {
+      "order": "df0bb8f7-11ee-458b-81f4-c234c4633481",
+      "seq": 1
+    },
+    {
+      "order": "4d05d358-7f58-4c5e-ba1a-fd72178fca62",
+      "seq": 1
+    },
+    {
+      "order": "a97cb4bc-5620-42c4-9890-f58676259699",
+      "seq": 1
+    },
+    {
+      "order": "f01268e0-33cc-4ce9-bb89-f5ea70a2685c",
+      "seq": 1
+    },
+    {
+      "order": "870469fc-f59c-4c46-85f4-7c5f2ecbe4d7",
+      "seq": 1
+    },
+    {
+      "order": "7093866b-c897-4b56-9c3a-af68c75a2329",
+      "seq": 1
+    },
+    {
+      "order": "5d46510c-9813-44e7-9517-b8f2fcdf50e6",
+      "seq": 1
+    },
+    {
+      "order": "8a711a6e-0ce5-4e04-a2a7-c8e69ebdd4ad",
+      "seq": 1
+    },
+    {
+      "order": "78cea9a3-5019-45ed-8338-d38c90c0b0e8",
+      "seq": 1
+    },
+    {
+      "order": "94fed38f-566b-49a3-b0bd-335042b6cf1b",
+      "seq": 1
+    },
+    {
+      "order": "9e653a79-87b6-47bf-b9d1-8d0669c6faa4",
+      "seq": 1
+    },
+    {
+      "order": "c15ad5ca-7ccd-4fbf-bce5-0011ca6baa8b",
+      "seq": 1
+    },
+    {
+      "order": "e2d300cc-57d7-4ee0-99e3-5a734eb3fe13",
+      "seq": 1
+    },
+    {
+      "order": "450b8539-ee3f-4996-9e4d-c39a8fa58652",
+      "seq": 1
+    },
+    {
+      "order": "91e77d41-51f9-41b8-9733-5bee03b8040f",
+      "seq": 1
+    },
+    {
+      "order": "76eda8f5-b8dc-4a13-8cc6-67badf879286",
+      "seq": 1
+    },
+    {
+      "order": "5c247f0c-8d62-4cdd-8beb-14005e6d49d9",
+      "seq": 1
+    },
+    {
+      "order": "5a08a3f6-3c43-490b-9df6-30f642d20a15",
+      "seq": 1
+    },
+    {
+      "order": "e99af671-8287-4d51-8571-dcbe5a089904",
+      "seq": 1
+    },
+    {
+      "order": "cf696315-0e39-42e4-9d80-c2b8beecbcf6",
+      "seq": 1
+    },
+    {
+      "order": "73928d2b-fbde-4311-8d0c-7cdc37dd6b78",
+      "seq": 1
+    },
+    {
+      "order": "f951d02f-0325-4ad5-831f-7da5a2f2fc9f",
+      "seq": 1
+    },
+    {
+      "order": "3190753a-d5c7-4137-a62f-0aec9c6ee73a",
+      "seq": 1
+    },
+    {
+      "order": "bff21655-99de-4407-bb33-52641f808056",
+      "seq": 1
+    },
+    {
+      "order": "e0b4d323-d743-4d87-938e-bd79ef3a63f0",
+      "seq": 1
+    },
+    {
+      "order": "9c9adccb-787f-4d5b-abb2-bfbd72048f96",
+      "seq": 1
+    },
+    {
+      "order": "a7fdbae8-193a-4dac-8c9a-dd7fab76b7d9",
+      "seq": 1
+    }
+  ],
+  "stale_redelivery": [
+    {
+      "order": "b195ea7d-a245-4b43-ad01-5c38980f33bf",
+      "seq": 1
+    },
+    {
+      "order": "6d7c01ed-9e2e-40f3-bbb9-f6572cdd72b0",
+      "seq": 1
+    },
+    {
+      "order": "ae7fc797-4fd8-49c8-beac-8c875cebbed6",
+      "seq": 1
+    },
+    {
+      "order": "0375136a-d9a3-4e31-a316-9718000cde97",
+      "seq": 1
+    },
+    {
+      "order": "8ca93cf9-fad0-40aa-8407-e0d735c0fdce",
+      "seq": 1
+    },
+    {
+      "order": "d7614d7d-5db2-476b-8453-f7095bd8df8d",
+      "seq": 1
+    },
+    {
+      "order": "819745bc-e1b4-4c34-a6d8-155d586b1b10",
+      "seq": 1
+    },
+    {
+      "order": "19565b40-a52d-4427-9fc3-8096ebe23c8f",
+      "seq": 1
+    },
+    {
+      "order": "d2b5a403-1b7f-4324-9827-71ce8134bc9d",
+      "seq": 1
+    },
+    {
+      "order": "81b5323d-8bc2-48ce-888a-52994820be79",
+      "seq": 1
+    },
+    {
+      "order": "7d576fa0-c853-44cb-98ce-3b7945c4a73b",
+      "seq": 1
+    },
+    {
+      "order": "ca9761e0-e2e2-4b61-935c-3745362c723a",
+      "seq": 1
+    },
+    {
+      "order": "89f0a313-45bf-488a-92a1-76d940dd71d7",
+      "seq": 1
+    },
+    {
+      "order": "6bd6fd74-1c91-4310-86a2-c5f4aa856749",
+      "seq": 1
+    },
+    {
+      "order": "32a19c0c-67cc-4157-9286-e4d491694482",
+      "seq": 1
+    },
+    {
+      "order": "5d46510c-9813-44e7-9517-b8f2fcdf50e6",
+      "seq": 1
+    },
+    {
+      "order": "a15da263-7361-48b2-ba2e-804714da1ca9",
+      "seq": 1
+    },
+    {
+      "order": "40f1c9c1-1b88-49c4-b110-3873eac9f3f8",
+      "seq": 1
+    },
+    {
+      "order": "8a711a6e-0ce5-4e04-a2a7-c8e69ebdd4ad",
+      "seq": 1
+    },
+    {
+      "order": "c3559395-747e-4a6d-9b42-a9e70c9d0202",
+      "seq": 1
+    },
+    {
+      "order": "78cea9a3-5019-45ed-8338-d38c90c0b0e8",
+      "seq": 1
+    },
+    {
+      "order": "94fed38f-566b-49a3-b0bd-335042b6cf1b",
+      "seq": 1
+    },
+    {
+      "order": "9e653a79-87b6-47bf-b9d1-8d0669c6faa4",
+      "seq": 1
+    },
+    {
+      "order": "c15ad5ca-7ccd-4fbf-bce5-0011ca6baa8b",
+      "seq": 1
+    },
+    {
+      "order": "e2d300cc-57d7-4ee0-99e3-5a734eb3fe13",
+      "seq": 1
+    },
+    {
+      "order": "450b8539-ee3f-4996-9e4d-c39a8fa58652",
+      "seq": 1
+    },
+    {
+      "order": "91e77d41-51f9-41b8-9733-5bee03b8040f",
+      "seq": 1
+    },
+    {
+      "order": "6218d10e-8b28-4172-a80b-11a7ebc0dace",
+      "seq": 1
+    },
+    {
+      "order": "497eec7c-0149-4c2f-8e96-09beb86a9214",
+      "seq": 1
+    },
+    {
+      "order": "adb6821f-a875-4afa-adf3-5d771ef8979e",
+      "seq": 1
+    },
+    {
+      "order": "76eda8f5-b8dc-4a13-8cc6-67badf879286",
+      "seq": 1
+    },
+    {
+      "order": "f1214c1b-9d31-4fd5-934d-ac70632e95d2",
+      "seq": 1
+    },
+    {
+      "order": "2fdad16b-28cd-4904-8b9d-381cc0181fa9",
+      "seq": 1
+    },
+    {
+      "order": "5c247f0c-8d62-4cdd-8beb-14005e6d49d9",
+      "seq": 1
+    },
+    {
+      "order": "5a08a3f6-3c43-490b-9df6-30f642d20a15",
+      "seq": 1
+    },
+    {
+      "order": "e99af671-8287-4d51-8571-dcbe5a089904",
+      "seq": 1
+    },
+    {
+      "order": "cf696315-0e39-42e4-9d80-c2b8beecbcf6",
+      "seq": 1
+    },
+    {
+      "order": "73928d2b-fbde-4311-8d0c-7cdc37dd6b78",
+      "seq": 1
+    },
+    {
+      "order": "f951d02f-0325-4ad5-831f-7da5a2f2fc9f",
+      "seq": 1
+    },
+    {
+      "order": "26e27f7d-0866-4cd5-82a8-35c303c986fe",
+      "seq": 1
+    },
+    {
+      "order": "3190753a-d5c7-4137-a62f-0aec9c6ee73a",
+      "seq": 1
+    },
+    {
+      "order": "bff21655-99de-4407-bb33-52641f808056",
+      "seq": 1
+    }
+  ],
+  "lost_after_send": null
+}

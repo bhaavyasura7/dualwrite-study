@@ -76,12 +76,21 @@ type Result struct {
 
 // Damage lists the exact pairs behind each metric, for root-cause analysis.
 type Damage struct {
-	Lost            []Pair `json:"lost"`
-	Ghost           []Pair `json:"ghost"`
-	Duplicates      []Pair `json:"duplicates"` // one entry per extra copy
-	OutOfOrder      []Pair `json:"out_of_order"`
-	StaleRedelivery []Pair `json:"stale_redelivery"`
-	LostAfterSend   []Pair `json:"lost_after_send"`
+	Lost            []Pair      `json:"lost"`
+	LostDetail      []LostEvent `json:"lost_detail"`
+	Ghost           []Pair      `json:"ghost"`
+	Duplicates      []Pair      `json:"duplicates"` // one entry per extra copy
+	OutOfOrder      []Pair      `json:"out_of_order"`
+	StaleRedelivery []Pair      `json:"stale_redelivery"`
+	LostAfterSend   []Pair      `json:"lost_after_send"`
+}
+
+// LostEvent explains one lost pair.
+type LostEvent struct {
+	Pair
+	CommitTime   time.Time `json:"commit_time"`
+	FinalVersion int       `json:"final_version"` // the order's last committed version
+	Intermediate bool      `json:"intermediate"`  // a later version of the order exists
 }
 
 // Check computes the cycle's metrics. Input order does not matter.
@@ -105,12 +114,12 @@ func Check(in Input) (Result, Damage) {
 	}
 
 	committed := make(map[Pair]time.Time, len(in.DB))
-	orders := make(map[string]struct{})
+	finalVersion := make(map[string]int)
 	for _, v := range in.DB {
 		committed[v.Pair] = v.CommitTime
-		orders[v.OrderID] = struct{}{}
+		finalVersion[v.OrderID] = max(finalVersion[v.OrderID], v.Seq)
 	}
-	result.OrdersTotal = len(orders)
+	result.OrdersTotal = len(finalVersion)
 
 	copies := make(map[Pair]int, len(in.Kafka))
 	first := make(map[Pair]time.Time, len(in.Kafka))
@@ -128,6 +137,8 @@ func Check(in Input) (Result, Damage) {
 			continue
 		}
 		damage.Lost = append(damage.Lost, pair)
+		final := finalVersion[pair.OrderID]
+		damage.LostDetail = append(damage.LostDetail, LostEvent{pair, committed[pair], final, pair.Seq < final})
 		if _, ok := hooked[pair]; ok {
 			result.HookedLost++
 		} else {
@@ -206,6 +217,29 @@ func ordering(records []Record) (outOfOrder, stale []Pair) {
 		highest[r.OrderID] = max(highest[r.OrderID], r.Seq)
 	}
 	return outOfOrder, stale
+}
+
+// RecoveryS is the time from faultEnd until every version committed by then had
+// reached Kafka. It is computed afterwards from broker timestamps, which gives the
+// same answer as sampling during the drain. ok is false if any is still lost.
+func RecoveryS(in Input, faultEnd time.Time) (seconds float64, ok bool) {
+	first := make(map[Pair]time.Time, len(in.Kafka))
+	for _, r := range in.Kafka {
+		if t, seen := first[r.Pair]; !seen || r.Timestamp.Before(t) {
+			first[r.Pair] = r.Timestamp
+		}
+	}
+	for _, v := range in.DB {
+		if v.CommitTime.After(faultEnd) {
+			continue
+		}
+		delivered, found := first[v.Pair]
+		if !found {
+			return 0, false
+		}
+		seconds = max(seconds, delivered.Sub(faultEnd).Seconds())
+	}
+	return seconds, true
 }
 
 func toSet(pairs []Pair) map[Pair]struct{} {

@@ -1,0 +1,58 @@
+time=2026-11-07T10:50:12.500+05:30 level=INFO msg="run started" cycles=25 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m7a.csv
+time=2026-11-07T10:50:12.528+05:30 level=INFO msg="recreating kafka connect" offset_flush_ms=1000 eos=disabled
+time=2026-11-07T10:50:57.474+05:30 level=INFO msg="fault injected" cycle=E-2_P4_c1_r01 fault=crash target=connect
+time=2026-11-07T10:51:30.123+05:30 level=INFO msg="cycle finished" cycle=E-2_P4_c1_r01 n=1 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=77.61319125 load_s=51.330033875
+time=2026-11-07T10:52:06.584+05:30 level=INFO msg="fault injected" cycle=C0-3_P2_r01 fault=graceful_stop target=orderservice
+time=2026-11-07T10:52:42.708+05:30 level=INFO msg="cycle finished" cycle=C0-3_P2_r01 n=2 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=72.581008541 load_s=61.944011667
+time=2026-11-07T10:53:17.156+05:30 level=INFO msg="fault injected" cycle=C0-3r_P3_r01 fault=graceful_stop target=relay
+time=2026-11-07T10:53:53.879+05:30 level=INFO msg="cycle finished" cycle=C0-3r_P3_r01 n=3 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=71.167112875 load_s=59.631718
+time=2026-11-07T10:54:04.312+05:30 level=INFO msg="fault injected" cycle=A-3_P2_r01 fault=proxy_disable target=kafka-app
+time=2026-11-07T10:55:05.698+05:30 level=INFO msg="cycle finished" cycle=A-3_P2_r01 n=4 of=25 status=OK lost=1568 hooked_lost=1 inflight=1567 cycle_s=71.795186708 load_s=60.976064833
+time=2026-11-07T10:55:15.956+05:30 level=INFO msg="fault injected" cycle=A-3r_P2_r01 fault=reset_peer target=kafka-app
+time=2026-11-07T10:56:17.129+05:30 level=INFO msg="cycle finished" cycle=A-3r_P2_r01 n=5 of=25 status=OK lost=1261 hooked_lost=1 inflight=1259 cycle_s=71.411437375 load_s=60.766302667
+time=2026-11-07T10:56:51.170+05:30 level=INFO msg="fault injected" cycle=A-6_P1_r01 fault=crash target=orderservice
+time=2026-11-07T10:57:22.348+05:30 level=INFO msg="cycle finished" cycle=A-6_P1_r01 n=6 of=25 status=OK lost=1 hooked_lost=0 inflight=0 cycle_s=65.199686292 load_s=54.511701083
+time=2026-11-07T10:57:57.401+05:30 level=INFO msg="fault injected" cycle=A-6_P3_r01 fault=crash target=orderservice
+time=2026-11-07T10:58:29.205+05:30 level=INFO msg="cycle finished" cycle=A-6_P3_r01 n=7 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=66.852640209 load_s=55.468943125
+time=2026-11-07T10:59:22.297+05:30 level=INFO msg="cycle finished" cycle=B-1_P3_r01 n=8 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=53.061466291 load_s=41.365940583
+time=2026-11-07T11:00:22.636+05:30 level=INFO msg="cycle finished" cycle=B-2_P3_r01 n=9 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=60.32176 load_s=48.68736275
+time=2026-11-07T11:00:54.458+05:30 level=INFO msg="fault injected" cycle=B-3_P2_c1_r01 fault=pause target=orderservice
+time=2026-11-07T11:01:35.483+05:30 level=INFO msg="cycle finished" cycle=B-3_P2_c1_r01 n=10 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=72.841074125 load_s=62.010377042
+time=2026-11-07T11:01:35.500+05:30 level=INFO msg="recreating kafka connect" offset_flush_ms=60000 eos=disabled
+time=2026-11-07T11:02:11.839+05:30 level=INFO msg="fault injected" cycle=B-4_P5_c1_r01 fault=pause target=connect
+time=2026-11-07T11:02:48.808+05:30 level=INFO msg="cycle finished" cycle=B-4_P5_c1_r01 n=11 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=73.319969792 load_s=47.802521375
+time=2026-11-07T11:03:05.287+05:30 level=INFO msg="fault injected" cycle=C-1_P1_c1_r01 fault=broker_stop target=kafka
+time=2026-11-07T11:03:48.004+05:30 level=INFO msg="cycle finished" cycle=C-1_P1_c1_r01 n=12 of=25 status=OK lost=2771 hooked_lost=0 inflight=0 cycle_s=59.178189916 load_s=48.424709416
+time=2026-11-07T11:04:04.716+05:30 level=INFO msg="fault injected" cycle=C-2_P2_c1_r01 fault=proxy_disable target=kafka-app
+time=2026-11-07T11:04:45.839+05:30 level=INFO msg="cycle finished" cycle=C-2_P2_c1_r01 n=13 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=57.814746875 load_s=46.919064583
+time=2026-11-07T11:05:01.222+05:30 level=INFO msg="fault injected" cycle=C-3_P3_r01 fault=proxy_disable target=kafka-app
+time=2026-11-07T11:05:17.131+05:30 level=INFO msg="fault injected" cycle=C-3_P3_r01 fault=crash target=relay
+time=2026-11-07T11:06:32.616+05:30 level=INFO msg="cycle finished" cycle=C-3_P3_r01 n=14 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=106.772580291 load_s=95.657622708
+time=2026-11-07T11:06:47.864+05:30 level=INFO msg="fault injected" cycle=C-3r_P2_r01 fault=reset_peer target=kafka-app
+time=2026-11-07T11:07:05.506+05:30 level=INFO msg="fault injected" cycle=C-3r_P2_r01 fault=crash target=orderservice
+time=2026-11-07T11:08:19.012+05:30 level=INFO msg="cycle finished" cycle=C-3r_P2_r01 n=15 of=25 status=OK lost=3182 hooked_lost=0 inflight=0 cycle_s=106.366699625 load_s=95.757263875
+time=2026-11-07T11:08:50.138+05:30 level=INFO msg="fault injected" cycle=E-1_P4_r01 fault=restart target=connect
+time=2026-11-07T11:09:24.603+05:30 level=INFO msg="cycle finished" cycle=E-1_P4_r01 n=16 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=65.5869415 load_s=52.627254584
+time=2026-11-07T11:09:39.951+05:30 level=INFO msg="fault injected" cycle=F-1_P3_c1_r01 fault=latency target=kafka-app
+time=2026-11-07T11:10:31.660+05:30 level=INFO msg="cycle finished" cycle=F-1_P3_c1_r01 n=17 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=67.051922291 load_s=55.529260209
+time=2026-11-07T11:10:59.135+05:30 level=INFO msg="fault injected" cycle=F-2_P2_r01 fault=withhold_downstream target=kafka-app
+time=2026-11-07T11:11:40.186+05:30 level=INFO msg="cycle finished" cycle=F-2_P2_r01 n=18 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=68.49166375 load_s=57.684694875
+time=2026-11-07T11:12:00.662+05:30 level=INFO msg="fault injected" cycle=F-3b_P3_r01 fault=withhold_downstream target=kafka-app
+time=2026-11-07T11:12:06.028+05:30 level=INFO msg="fault injected" cycle=F-3b_P3_r01 fault=crash target=relay
+time=2026-11-07T11:12:42.323+05:30 level=INFO msg="cycle finished" cycle=F-3b_P3_r01 n=19 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=62.114544 load_s=50.584110791
+time=2026-11-07T11:12:57.926+05:30 level=INFO msg="fault injected" cycle=F-4_P4_c1_r01 fault=reset_peer target=kafka-app
+time=2026-11-07T11:13:50.151+05:30 level=INFO msg="cycle finished" cycle=F-4_P4_c1_r01 n=20 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=67.822683791 load_s=55.457749667
+time=2026-11-07T11:14:05.496+05:30 level=INFO msg="fault injected" cycle=F-5_P1_c1_r01 fault=latency target=pg-app
+time=2026-11-07T11:14:56.390+05:30 level=INFO msg="cycle finished" cycle=F-5_P1_c1_r01 n=21 of=25 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=66.235371 load_s=55.389793
+time=2026-11-07T11:15:34.035+05:30 level=INFO msg="fault injected" cycle=D-1_P1_r01 fault=failover target=postgres
+time=2026-11-07T11:16:00.156+05:30 level=ERROR msg="cycle failed" cycle=D-1_P1_r01 status=FAILED_FAULT error="repoint pg-app: invalid character '<' looking for beginning of value"
+time=2026-11-07T11:16:10.033+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_r01 n=22 of=25 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=63.765061292 load_s=0
+time=2026-11-07T11:16:36.620+05:30 level=INFO msg="fault injected" cycle=D-1_P4_r01 fault=failover target=postgres
+time=2026-11-07T11:17:02.108+05:30 level=ERROR msg="cycle failed" cycle=D-1_P4_r01 status=FAILED_FAULT error="repoint pg-app: invalid character '<' looking for beginning of value"
+time=2026-11-07T11:17:12.502+05:30 level=INFO msg="cycle finished" cycle=D-1_P4_r01 n=23 of=25 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=52.074853417 load_s=0
+time=2026-11-07T11:17:42.965+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T11:18:08.447+05:30 level=ERROR msg="cycle failed" cycle=D-2_P5_c1_r01 status=FAILED_FAULT error="repoint pg-app: invalid character '<' looking for beginning of value"
+time=2026-11-07T11:18:19.071+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r01 n=24 of=25 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=55.945144125 load_s=0
+time=2026-11-07T11:18:32.229+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:18:57.737+05:30 level=ERROR msg="cycle failed" cycle=D-3_P3_r01 status=FAILED_FAULT error="repoint pg-app: invalid character '<' looking for beginning of value"
+time=2026-11-07T11:19:08.210+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r01 n=25 of=25 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=38.664939666 load_s=0

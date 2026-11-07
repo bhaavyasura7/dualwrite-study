@@ -1,0 +1,13 @@
+time=2026-11-07T12:15:16.624+05:30 level=INFO msg="run started" cycles=17 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/m7i.csv
+time=2026-11-07T12:15:16.627+05:30 level=INFO msg="switching broker count" from=3 to=1
+time=2026-11-07T12:16:14.535+05:30 level=INFO msg="fault injected" cycle=D-1_P1_c3_r01 fault=failover target=postgres
+time=2026-11-07T12:17:05.635+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_c3_r01 n=1 of=17 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=74.127047458 load_s=62.513815833
+time=2026-11-07T12:17:27.578+05:30 level=INFO msg="fault injected" cycle=D-1_P1_c3_r02 fault=failover target=postgres
+time=2026-11-07T12:18:03.208+05:30 level=ERROR msg="cycle failed" cycle=D-1_P1_c3_r02 status=FAILED_CHECK error="list end offsets: unable to dial: dial tcp [::1]:29092: connect: connection refused"
+time=2026-11-07T12:18:17.084+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_c3_r02 n=2 of=17 status=FAILED_CHECK lost=0 hooked_lost=0 inflight=0 cycle_s=57.567343458 load_s=46.902161625
+time=2026-11-07T12:18:38.242+05:30 level=INFO msg="fault injected" cycle=D-1_P3_c1_r01 fault=failover target=postgres
+time=2026-11-07T12:20:00.365+05:30 level=ERROR msg="cycle failed" cycle=D-1_P3_c1_r01 status=FAILED_CHECK error="list end offsets: unable to dial: dial tcp [::1]:29092: connect: connection refused"
+time=2026-11-07T12:20:06.150+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_c1_r01 n=3 of=17 status=FAILED_CHECK lost=0 hooked_lost=0 inflight=0 cycle_s=103.269380375 load_s=46.052574458
+time=2026-11-07T12:20:42.415+05:30 level=INFO msg="fault injected" cycle=D-1_P3_c1_r02 fault=failover target=postgres
+time=2026-11-07T12:21:59.749+05:30 level=ERROR msg="cycle failed" cycle=D-1_P3_c1_r02 status=FAILED_DRAIN error="context canceled"
+time=2026-11-07T12:21:59.754+05:30 level=ERROR msg="runner failed" error="after D-1_P3_c1_r02: list connectors: Get \"http://localhost:8083/connectors\": terminated signal received"

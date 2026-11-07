@@ -11,7 +11,10 @@ psql_() { docker compose exec -T postgres-primary psql -U app -d shop -Atc "$1";
 kafka() { docker compose exec -T broker-1 /opt/kafka/bin/"$@"; }
 code() { curl -s -o /dev/null -w '%{http_code}' --max-time "${2:-10}" -X POST "$api$1" "${@:3}"; }
 create() { curl -s --max-time 10 -X POST "$api/orders" -d '{"amount": 499.50}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["order_id"])'; }
-proxy() { curl -fsS -X POST "localhost:8474/proxies/$1" -d "{\"enabled\":$2}" >/dev/null; }
+proxy() { # pg proxies live on their own Toxiproxy instance
+  local api=8474; case $1 in pg-*) api=8475 ;; esac
+  curl -fsS -X POST "localhost:$api/proxies/$1" -d "{\"enabled\":$2}" >/dev/null
+}
 logs() { docker compose logs --no-log-prefix orderservice 2>/dev/null; }
 marker() { logs | grep -c "\"msg\":\"$1\""; }
 

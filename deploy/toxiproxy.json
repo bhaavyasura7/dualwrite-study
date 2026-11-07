@@ -1,6 +1,8 @@
 [
-  { "name": "pg-app", "listen": "0.0.0.0:15432", "upstream": "postgres-primary:5432", "enabled": true },
-  { "name": "pg-connect", "listen": "0.0.0.0:15433", "upstream": "postgres-primary:5432", "enabled": true },
-  { "name": "kafka-app-b1", "listen": "0.0.0.0:19091", "upstream": "broker-1:9092", "enabled": true },
-  { "name": "kafka-connect-b1", "listen": "0.0.0.0:19191", "upstream": "broker-1:9094", "enabled": true }
+  {"name": "kafka-app-b1", "listen": "0.0.0.0:19091", "upstream": "broker-1:9092", "enabled": true},
+  {"name": "kafka-connect-b1", "listen": "0.0.0.0:19191", "upstream": "broker-1:9094", "enabled": true},
+  {"name": "kafka-app-b2", "listen": "0.0.0.0:19092", "upstream": "broker-2:9092", "enabled": true},
+  {"name": "kafka-connect-b2", "listen": "0.0.0.0:19192", "upstream": "broker-2:9094", "enabled": true},
+  {"name": "kafka-app-b3", "listen": "0.0.0.0:19093", "upstream": "broker-3:9092", "enabled": true},
+  {"name": "kafka-connect-b3", "listen": "0.0.0.0:19193", "upstream": "broker-3:9094", "enabled": true}
 ]

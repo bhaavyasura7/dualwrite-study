@@ -1,0 +1,15 @@
+time=2026-11-07T11:48:14.342+05:30 level=INFO msg="run started" cycles=7 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m7f.csv
+time=2026-11-07T11:48:53.132+05:30 level=INFO msg="fault injected" cycle=D-1_P1_r01 fault=failover target=postgres
+time=2026-11-07T11:49:34.756+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_r01 n=1 of=7 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=74.578844667 load_s=62.673545083
+time=2026-11-07T11:50:11.520+05:30 level=INFO msg="fault injected" cycle=D-1_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:51:07.295+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_r01 n=2 of=7 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=86.667526917 load_s=60.553896209
+time=2026-11-07T11:51:34.805+05:30 level=INFO msg="fault injected" cycle=D-1_P4_r01 fault=failover target=postgres
+time=2026-11-07T11:52:17.501+05:30 level=INFO msg="cycle finished" cycle=D-1_P4_r01 n=3 of=7 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=63.784966459 load_s=51.842795625
+time=2026-11-07T11:52:46.814+05:30 level=INFO msg="fault injected" cycle=D-1_P5_r01 fault=failover target=postgres
+time=2026-11-07T11:53:29.579+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_r01 n=4 of=7 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=65.715768708 load_s=53.682674541
+time=2026-11-07T11:54:01.131+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T11:54:43.706+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r01 n=5 of=7 status=OK lost=58 hooked_lost=0 inflight=0 cycle_s=67.80514175 load_s=55.832782083
+time=2026-11-07T11:55:15.269+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r01 fault=failover target=postgres
+time=2026-11-07T11:55:58.021+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r01 n=6 of=7 status=OK lost=16 hooked_lost=0 inflight=0 cycle_s=68.111416834 load_s=55.871143417
+time=2026-11-07T11:56:09.105+05:30 level=ERROR msg="cycle failed" cycle=D-3_P3_r01 status=FAILED_WARMUP error="context canceled"
+time=2026-11-07T11:56:09.112+05:30 level=ERROR msg="runner failed" error="after D-3_P3_r01: list connectors: Get \"http://localhost:8083/connectors\": terminated signal received"

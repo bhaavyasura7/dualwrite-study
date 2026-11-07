@@ -29,7 +29,7 @@ primary "DELETE FROM orders_history WHERE order_id = '$id'; DELETE FROM orders W
 
 # Postgres through both proxy groups, from inside the network.
 for port in 15432 15433; do
-  check "postgres via toxiproxy:$port" 1 "$(docker compose exec -T -e PGPASSWORD=app postgres-primary psql -h toxiproxy -p $port -U app -d shop -Atc 'SELECT 1')"
+  check "postgres via toxiproxy:$port" 1 "$(docker compose exec -T -e PGPASSWORD=app postgres-primary psql -h toxiproxy-pg -p $port -U app -d shop -Atc 'SELECT 1')"
 done
 
 # Each client class must be told to stay on its own proxy after metadata discovery.
@@ -68,7 +68,7 @@ case "$plugins" in
   *) echo "FAIL  debezium plugin missing"; fail=1 ;;
 esac
 
-[ "$(docker compose ps --format '{{.Service}}' | wc -l | tr -d ' ')" == 5 ] && echo "ok    5 services running" || { echo "FAIL  service count"; fail=1; }
+[ "$(docker compose ps --format '{{.Service}}' | wc -l | tr -d ' ')" == 6 ] && echo "ok    6 services running" || { echo "FAIL  service count"; fail=1; }
 echo; for s in $(docker compose images --format json | python3 -c "import sys,json;[print(i['Repository']+':'+i['Tag']) for i in json.load(sys.stdin)]" | sort -u); do
   echo "arch $(docker image inspect "$s" --format '{{.Architecture}}')  $s"
 done

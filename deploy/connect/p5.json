@@ -3,7 +3,7 @@
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "plugin.name": "pgoutput",
-    "database.hostname": "toxiproxy", "database.port": "15433",
+    "database.hostname": "toxiproxy-pg", "database.port": "15433",
     "database.user": "app", "database.password": "app", "database.dbname": "shop",
     "slot.name": "slot_{{cycle_slug}}",
     "publication.name": "pub_orders",

@@ -1,0 +1,140 @@
+dualwrite-postgres-replica-1 27.95MiB / 1GiB
+dualwrite-kafka-connect-1 1005MiB / 1.5GiB
+dualwrite-postgres-primary-1 114.3MiB / 1GiB
+dualwrite-broker-1-1 595.1MiB / 1.5GiB
+dualwrite-toxiproxy-1 25.52MiB / 256MiB
+---
+dualwrite-broker-2-1 431.8MiB / 1.5GiB
+dualwrite-broker-1-1 461.8MiB / 1.5GiB
+dualwrite-broker-3-1 428.1MiB / 1.5GiB
+dualwrite-postgres-replica-1 27.97MiB / 1GiB
+dualwrite-postgres-primary-1 115MiB / 1GiB
+dualwrite-toxiproxy-1 24.21MiB / 256MiB
+---
+dualwrite-run-orderservice 34.91MiB / 256MiB
+dualwrite-kafka-connect-1 926.2MiB / 1.5GiB
+dualwrite-broker-2-1 515.6MiB / 1.5GiB
+dualwrite-broker-1-1 535.7MiB / 1.5GiB
+dualwrite-broker-3-1 515.5MiB / 1.5GiB
+dualwrite-postgres-replica-1 28.6MiB / 1GiB
+dualwrite-postgres-primary-1 155.6MiB / 1GiB
+dualwrite-toxiproxy-1 35.17MiB / 256MiB
+---
+dualwrite-run-orderservice 36.69MiB / 256MiB
+dualwrite-kafka-connect-1 926.9MiB / 1.5GiB
+dualwrite-broker-2-1 509.9MiB / 1.5GiB
+dualwrite-broker-1-1 535MiB / 1.5GiB
+dualwrite-broker-3-1 516.5MiB / 1.5GiB
+dualwrite-postgres-replica-1 29.38MiB / 1GiB
+dualwrite-postgres-primary-1 157.2MiB / 1GiB
+dualwrite-toxiproxy-1 41.59MiB / 256MiB
+---
+dualwrite-run-orderservice 37.89MiB / 256MiB
+dualwrite-kafka-connect-1 927.9MiB / 1.5GiB
+dualwrite-broker-2-1 523.7MiB / 1.5GiB
+dualwrite-broker-1-1 536.8MiB / 1.5GiB
+dualwrite-broker-3-1 537.7MiB / 1.5GiB
+dualwrite-postgres-replica-1 30.28MiB / 1GiB
+dualwrite-postgres-primary-1 157.9MiB / 1GiB
+dualwrite-toxiproxy-1 41.24MiB / 256MiB
+---
+dualwrite-run-orderservice 19.73MiB / 256MiB
+dualwrite-kafka-connect-1 945.8MiB / 1.5GiB
+dualwrite-broker-2-1 561.8MiB / 1.5GiB
+dualwrite-broker-1-1 479.4MiB / 1.5GiB
+dualwrite-broker-3-1 585.5MiB / 1.5GiB
+dualwrite-postgres-replica-1 30.96MiB / 1GiB
+dualwrite-postgres-primary-1 157.5MiB / 1GiB
+dualwrite-toxiproxy-1 41.22MiB / 256MiB
+---
+dualwrite-run-orderservice 21.73MiB / 256MiB
+dualwrite-kafka-connect-1 946MiB / 1.5GiB
+dualwrite-broker-2-1 571.5MiB / 1.5GiB
+dualwrite-broker-1-1 436.5MiB / 1.5GiB
+dualwrite-broker-3-1 588.5MiB / 1.5GiB
+dualwrite-postgres-replica-1 30.66MiB / 1GiB
+dualwrite-postgres-primary-1 159.3MiB / 1GiB
+dualwrite-toxiproxy-1 43.52MiB / 256MiB
+---
+dualwrite-kafka-connect-1 947.1MiB / 1.5GiB
+dualwrite-broker-2-1 643.3MiB / 1.5GiB
+dualwrite-broker-1-1 434.9MiB / 1.5GiB
+dualwrite-broker-3-1 653MiB / 1.5GiB
+dualwrite-postgres-replica-1 30.17MiB / 1GiB
+dualwrite-postgres-primary-1 118.1MiB / 1GiB
+dualwrite-toxiproxy-1 44.21MiB / 256MiB
+---
+dualwrite-run-relay-1 29.06MiB / 256MiB
+dualwrite-run-orderservice 13.59MiB / 256MiB
+dualwrite-kafka-connect-1 946.5MiB / 1.5GiB
+dualwrite-broker-2-1 618.9MiB / 1.5GiB
+dualwrite-broker-1-1 601.7MiB / 1.5GiB
+dualwrite-broker-3-1 636.5MiB / 1.5GiB
+dualwrite-postgres-replica-1 33.16MiB / 1GiB
+dualwrite-postgres-primary-1 132.2MiB / 1GiB
+dualwrite-toxiproxy-1 41.75MiB / 256MiB
+---
+dualwrite-run-relay-1 28.15MiB / 256MiB
+dualwrite-run-orderservice 17.55MiB / 256MiB
+dualwrite-kafka-connect-1 947.4MiB / 1.5GiB
+dualwrite-broker-2-1 622MiB / 1.5GiB
+dualwrite-broker-1-1 505.7MiB / 1.5GiB
+dualwrite-broker-3-1 520.6MiB / 1.5GiB
+dualwrite-postgres-replica-1 36.64MiB / 1GiB
+dualwrite-postgres-primary-1 167.7MiB / 1GiB
+dualwrite-toxiproxy-1 43.29MiB / 256MiB
+---
+dualwrite-kafka-connect-1 1000MiB / 1.5GiB
+dualwrite-broker-2-1 629MiB / 1.5GiB
+dualwrite-broker-1-1 512MiB / 1.5GiB
+dualwrite-broker-3-1 444.2MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.57MiB / 1GiB
+dualwrite-postgres-primary-1 139MiB / 1GiB
+dualwrite-toxiproxy-1 41.61MiB / 256MiB
+dualwrite-run-orderservice 10.66MiB / 256MiB
+---
+dualwrite-run-orderservice 16.85MiB / 256MiB
+dualwrite-kafka-connect-1 1009MiB / 1.5GiB
+dualwrite-broker-2-1 757.5MiB / 1.5GiB
+dualwrite-broker-1-1 563.8MiB / 1.5GiB
+dualwrite-broker-3-1 494MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.72MiB / 1GiB
+dualwrite-postgres-primary-1 173.2MiB / 1GiB
+dualwrite-toxiproxy-1 40.48MiB / 256MiB
+---
+dualwrite-run-orderservice 17.81MiB / 256MiB
+dualwrite-kafka-connect-1 1016MiB / 1.5GiB
+dualwrite-broker-2-1 699.1MiB / 1.5GiB
+dualwrite-broker-1-1 441MiB / 1.5GiB
+dualwrite-broker-3-1 503.7MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.34MiB / 1GiB
+dualwrite-postgres-primary-1 175.3MiB / 1GiB
+dualwrite-toxiproxy-1 41.02MiB / 256MiB
+---
+dualwrite-run-orderservice 16.27MiB / 256MiB
+dualwrite-kafka-connect-1 1.005GiB / 1.5GiB
+dualwrite-broker-2-1 767.5MiB / 1.5GiB
+dualwrite-broker-1-1 491.2MiB / 1.5GiB
+dualwrite-broker-3-1 679.4MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.96MiB / 1GiB
+dualwrite-postgres-primary-1 172.9MiB / 1GiB
+dualwrite-toxiproxy-1 41.73MiB / 256MiB
+---
+dualwrite-run-orderservice 18.12MiB / 256MiB
+dualwrite-kafka-connect-1 1.005GiB / 1.5GiB
+dualwrite-broker-2-1 822.3MiB / 1.5GiB
+dualwrite-broker-1-1 552.4MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.95MiB / 1GiB
+dualwrite-postgres-primary-1 173.5MiB / 1GiB
+dualwrite-toxiproxy-1 43.83MiB / 256MiB
+dualwrite-broker-3-1 271MiB / 1.5GiB
+---
+dualwrite-run-orderservice 18.63MiB / 256MiB
+dualwrite-kafka-connect-1 1.005GiB / 1.5GiB
+dualwrite-broker-2-1 771.4MiB / 1.5GiB
+dualwrite-broker-1-1 506.1MiB / 1.5GiB
+dualwrite-broker-3-1 558.3MiB / 1.5GiB
+dualwrite-postgres-replica-1 37.86MiB / 1GiB
+dualwrite-postgres-primary-1 174.9MiB / 1GiB
+dualwrite-toxiproxy-1 43.55MiB / 256MiB
+---

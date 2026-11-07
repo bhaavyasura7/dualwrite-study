@@ -23,9 +23,9 @@ var columns = []string{
 	"business_damage_naive", "business_damage_dedup", "business_damage_upsert",
 	"wal_retained_bytes_max", "outbox_backlog_max", "relay_batches", "batch_rows_mean", "batch_rows_max",
 	"send_failed", "crash_after_n", "inflight_at_crash", "oldest_pending_ms",
-	"host", "shard", "git_commit",
+	"failover_at", "failover_lag_bytes", "failover_lag_ms", "host", "shard", "git_commit",
 	"window_p50_ms", "window_p99_ms", "window_max_ms", "recovery_s",
-	"throughput_ops", "latency_p50_ms", "latency_p99_ms", "db_cpu_pct", "load_s",
+	"throughput_ops", "latency_p50_ms", "latency_p99_ms", "db_cpu_pct", "load_s", "load_failed",
 	"pre_host_load", "pre_db_cpu_pct", "pre_p99_ms", "pre_flag", "started_at", "finished_at",
 }
 
@@ -35,6 +35,10 @@ type Row struct {
 	Repeat                                                     int
 	Seed                                                       uint64
 	Status, SweepJSON, EnvJSON, VersionsJSON                   string
+	RecoveryS                                                  string
+	LoadFailed                                                 int
+	FailoverLagBytes, FailoverLagMS                            string
+	FailoverAt                                                 time.Time
 	LoadRate                                                   int
 	Result                                                     checker.Result
 	CrashAfterN                                                int
@@ -61,6 +65,10 @@ func (r Row) record() []string {
 	if r.WALRetainedMax > 0 {
 		wal = strconv.FormatInt(r.WALRetainedMax, 10)
 	}
+	failoverAt := ""
+	if !r.FailoverAt.IsZero() {
+		failoverAt = r.FailoverAt.UTC().Format(time.RFC3339Nano)
+	}
 	backlog := ""
 	if r.Pattern == "P3" {
 		backlog = strconv.FormatInt(r.OutboxBacklogMax, 10)
@@ -75,9 +83,9 @@ func (r Row) record() []string {
 		damage("naive"), damage("dedup"), damage("upsert"),
 		wal, backlog, count(res.RelayBatches), number(res.BatchRowsMean), count(res.BatchRowsMax),
 		count(res.SendFailed), count(r.CrashAfterN), count(res.InflightAtCrash), number(res.OldestPendingMS),
-		r.Host, r.Shard, r.GitCommit,
-		number(res.WindowP50MS), number(res.WindowP99MS), number(res.WindowMaxMS), "",
-		number(r.ThroughputOps), number(r.LatencyP50MS), number(r.LatencyP99MS), number(r.DBCPUPct), number(r.LoadS),
+		failoverAt, r.FailoverLagBytes, r.FailoverLagMS, r.Host, r.Shard, r.GitCommit,
+		number(res.WindowP50MS), number(res.WindowP99MS), number(res.WindowMaxMS), r.RecoveryS,
+		number(r.ThroughputOps), number(r.LatencyP50MS), number(r.LatencyP99MS), number(r.DBCPUPct), number(r.LoadS), count(r.LoadFailed),
 		number(r.PreHostLoad), number(r.PreDBCPUPct), number(r.PreP99MS), r.PreFlag,
 		r.StartedAt.UTC().Format(time.RFC3339), r.FinishedAt.UTC().Format(time.RFC3339),
 	}

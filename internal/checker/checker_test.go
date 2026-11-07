@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGolden(t *testing.T) {
@@ -146,6 +147,40 @@ func TestParseLogsInflightAtCrash(t *testing.T) {
 	}
 	if got.InflightAtCrash != 2 || got.OldestPendingMS != 60 {
 		t.Fatalf("inflight = %d, oldest = %v ms", got.InflightAtCrash, got.OldestPendingMS)
+	}
+}
+
+func TestLostDetailMarksIntermediateVersions(t *testing.T) {
+	_, damage := Check(Input{DB: []Version{{Pair: Pair{"a", 1}}, {Pair: Pair{"a", 2}}, {Pair: Pair{"b", 1}}}})
+	if len(damage.LostDetail) != 3 {
+		t.Fatalf("detail = %+v", damage.LostDetail)
+	}
+	for _, lost := range damage.LostDetail {
+		if want := lost.OrderID == "a" && lost.Seq == 1; lost.Intermediate != want {
+			t.Errorf("%+v: intermediate = %v", lost.Pair, lost.Intermediate)
+		}
+	}
+}
+
+func TestRecoveryS(t *testing.T) {
+	end := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	in := Input{
+		DB: []Version{
+			{Pair{"a", 1}, end.Add(-time.Second)},
+			{Pair{"b", 1}, end.Add(-time.Second)},
+			{Pair{"late", 1}, end.Add(time.Minute)},
+		},
+		Kafka: []Record{
+			{Pair: Pair{"a", 1}, Timestamp: end.Add(-500 * time.Millisecond)},
+			{Pair: Pair{"b", 1}, Timestamp: end.Add(3 * time.Second)},
+		},
+	}
+	if got, ok := RecoveryS(in, end); !ok || got != 3 {
+		t.Fatalf("got %v, %v", got, ok)
+	}
+	in.Kafka = in.Kafka[:1]
+	if _, ok := RecoveryS(in, end); ok {
+		t.Fatal("reported recovery with a version still lost")
 	}
 }
 

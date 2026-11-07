@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,23 +30,27 @@ import (
 	"dualwrite-study/internal/checker"
 	"dualwrite-study/internal/config"
 	"dualwrite-study/internal/load"
-	"dualwrite-study/internal/obs"
 )
 
 const (
-	orderService = "dualwrite-run-orderservice"
-	relayName    = "dualwrite-run-relay-"
-	serviceImage = "dualwrite/orderservice:dev"
-	relayImage   = "dualwrite/relay:dev"
-	maxRelays    = 4
-	servicePort  = "8080"
-	primary      = "dualwrite-postgres-primary-1"
-	goMemory     = 256 << 20
+	orderService     = "dualwrite-run-orderservice"
+	relayName        = "dualwrite-run-relay-"
+	serviceImage     = "dualwrite/orderservice:dev"
+	relayImage       = "dualwrite/relay:dev"
+	maxRelays        = 4
+	servicePort      = "8080"
+	primary          = "dualwrite-postgres-primary-1"
+	replica          = "dualwrite-postgres-replica-1"
+	broker           = "dualwrite-broker-1-1"
+	connectContainer = "dualwrite-kafka-connect-1"
+	pgProxy          = "dualwrite-toxiproxy-pg-1"
+	goMemory         = 256 << 20
 )
 
 // BaseContainers are the stack's long-running containers.
 var BaseContainers = []string{
 	primary, "dualwrite-postgres-replica-1", "dualwrite-broker-1-1", "dualwrite-kafka-connect-1", "dualwrite-toxiproxy-1",
+	pgProxy,
 }
 
 // State timeouts (SPEC 14.2).
@@ -75,6 +80,7 @@ type Runner struct {
 	results     *Results
 	measurement config.Measurement
 	toxics      *toxiproxy.Client
+	pgToxics    *toxiproxy.Client
 	admin       *kadm.Client
 	baseLoad    config.LoadGen
 }
@@ -89,39 +95,56 @@ func New(opts Options, docker *Docker, results *Results) (*Runner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	client, err := kgo.NewClient(kgo.SeedBrokers(measurement.KafkaBrokers...))
-	if err != nil {
-		return nil, fmt.Errorf("kafka admin client: %w", err)
-	}
 	return &Runner{
 		opts:        opts,
 		docker:      docker,
 		results:     results,
 		measurement: measurement,
 		toxics:      toxiproxy.NewClient("localhost:8474"),
-		admin:       kadm.NewClient(client),
+		pgToxics:    toxiproxy.NewClient("localhost:8475"),
 		baseLoad:    baseLoad,
 	}, nil
 }
 
 // Close releases the runner's clients.
-func (r *Runner) Close() { r.admin.Close() }
+func (r *Runner) Close() {
+	if r.admin != nil {
+		r.admin.Close()
+	}
+}
+
+// seeds lists the direct broker addresses of a topology. A closed port among the
+// seeds would fail requests at random, so only running brokers are listed.
+func (r *Runner) seeds(brokers int) []string {
+	seeds := slices.Clone(r.measurement.KafkaBrokers)
+	if brokers == 3 {
+		seeds = append(seeds, "localhost:29092", "localhost:29093")
+	}
+	return seeds
+}
+
+// connectAdmin points the admin client at the running topology.
+func (r *Runner) connectAdmin(brokers int) error {
+	client, err := kgo.NewClient(kgo.SeedBrokers(r.seeds(brokers)...))
+	if err != nil {
+		return fmt.Errorf("kafka admin client: %w", err)
+	}
+	r.Close()
+	r.admin = kadm.NewClient(client)
+	return nil
+}
 
 // Supported reports why this build cannot yet run the cycle, or nil. Refusing up
 // front stops a vector from running with parts of it silently missing.
 func Supported(c Cycle) error {
 	switch {
-	case len(c.Faults) > 0:
-		return errors.New("fault injection is not built yet")
-	case c.Stall != nil:
-		return errors.New("stall cycles are not built yet")
 	case c.Crash != nil && c.Crash.Component != "orderservice" && c.Crash.Component != "relay":
 		return fmt.Errorf("crash component %s is not built yet", c.Crash.Component)
 	case c.Crash != nil && c.Crash.Component == "relay" && c.Topology.Relays != 1:
 		return errors.New("crash points on several relays are not built yet")
 	case len(c.Topology.Consumers) > 0:
 		return errors.New("consumers are not built yet")
-	case c.Crash == nil && c.Load.DurationS == 0:
+	case c.Crash == nil && c.Stall == nil && len(c.Faults) == 0 && c.Load.DurationS == 0:
 		return errors.New("cycle has no fault and no load duration")
 	}
 	return nil
@@ -134,11 +157,19 @@ const minFreeDiskGB = 20
 // Recreating the broker wipes Connect's internal topics, after which Connect
 // floods its log at about 20 MB/s and stalls everything sharing the disk.
 func (r *Runner) Preflight(ctx context.Context) error {
-	topics, err := r.admin.ListTopics(ctx, "connect-configs", "connect-offsets", "connect-status")
+	brokers, err := r.currentBrokers(ctx)
+	if err != nil {
+		return err
+	}
+	if err := r.connectAdmin(brokers); err != nil {
+		return err
+	}
+	names := connectTopics(brokers)
+	topics, err := r.admin.ListTopics(ctx, names...)
 	if err != nil {
 		return fmt.Errorf("list connect topics: %w", err)
 	}
-	for _, topic := range []string{"connect-configs", "connect-offsets", "connect-status"} {
+	for _, topic := range names {
 		if detail, ok := topics[topic]; !ok || detail.Err != nil {
 			return fmt.Errorf("topic %s is missing; recreate kafka-connect (docker compose rm -sfv kafka-connect && make up)", topic)
 		}
@@ -163,9 +194,17 @@ func (r *Runner) Run(ctx context.Context, cycles []Cycle) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := r.ensureBrokers(ctx, cycle.Topology.Brokers); err != nil {
+			return fmt.Errorf("before %s: %w", cycle.ID, err)
+		}
 		row := r.runCycle(ctx, cycle)
 		if err := r.results.Append(row); err != nil {
 			return err
+		}
+		if cycle.RequiresRebuild {
+			if err := r.rebuild(ctx); err != nil {
+				return fmt.Errorf("after %s: %w", cycle.ID, err)
+			}
 		}
 		slog.Info("cycle finished", "cycle", cycle.ID, "n", i+1, "of", len(cycles), "status", row.Status,
 			"lost", row.Result.Lost, "hooked_lost", row.Result.HookedLost, "inflight", row.Result.InflightAtCrash,
@@ -183,8 +222,10 @@ type cycleRun struct {
 	row        *Row
 	logs       bytes.Buffer
 	env        map[string]string
-	crashEnv   map[string]string // applied only to the crash component
+	pointEnv   map[string]string // crash or stall settings, applied only to their component
 	components []Spec
+	truthDSN   string    // the database that holds the truth; the replica after failover
+	faultEnd   time.Time // when the last fault ended
 }
 
 // failure carries the status a cycle ended with.
@@ -207,7 +248,7 @@ func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 		LoadRate: cycle.Load.RatePerS, Host: r.opts.Host, Shard: r.opts.Shard.String(), GitCommit: r.opts.GitCommit,
 		StartedAt: time.Now(),
 	}
-	run := &cycleRun{cycle: cycle, row: &row}
+	run := &cycleRun{cycle: cycle, row: &row, truthDSN: r.measurement.PostgresDSN}
 	var damage checker.Damage
 	err := r.execute(ctx, run, seed, &damage)
 	row.FinishedAt = time.Now()
@@ -265,10 +306,18 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	if err := r.precheck(ctx, run, session); err != nil {
 		return failed("WARMUP", err)
 	}
+	if run.row.PreP99MS == 0 {
+		// No request succeeded before the fault: a fault on an idle system proves
+		// nothing, and "lost 0" here would be false comfort.
+		stopLoad()
+		report, _ := session.Wait()
+		run.row.LoadFailed = report.Failed
+		return &failure{"INVALID_NO_LOAD", errors.New("no successful request before the fault")}
+	}
 
 	// FAULT and RECOVER
-	if cycle.Crash != nil {
-		if err := r.crashAndRecover(ctx, run); err != nil {
+	if len(cycle.Faults) > 0 || cycle.Crash != nil || cycle.Stall != nil {
+		if err := r.runFaults(ctx, run, seed); err != nil {
 			stopLoad()
 			_, _ = session.Wait()
 			return err
@@ -286,14 +335,14 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	if err != nil {
 		return failed("DRAIN", err)
 	}
-	run.row.ThroughputOps, run.row.LoadS = report.ThroughputOps, report.DurationS
+	run.row.ThroughputOps, run.row.LoadS, run.row.LoadFailed = report.ThroughputOps, report.DurationS, report.Failed
 	run.row.LatencyP50MS, run.row.LatencyP99MS = report.LatencyP50MS, report.LatencyP99MS
 	if cpuErr == nil {
 		if cpuAfter, err := r.docker.CPU(ctx, primary); err == nil {
 			run.row.DBCPUPct = cpuPercent(cpuBefore, cpuAfter)
 		}
 	}
-	if err := r.drain(ctx, cycle); err != nil {
+	if err := r.drain(ctx, run); err != nil {
 		return failed("DRAIN", err)
 	}
 	for _, component := range run.components {
@@ -311,12 +360,17 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	// CHECK
 	checkCtx, cancelCheck := context.WithTimeout(ctx, checkTimeout)
 	defer cancelCheck()
-	in, err := checker.Collect(checkCtx, r.measurement.PostgresDSN, r.measurement.KafkaBrokers,
+	in, err := checker.Collect(checkCtx, run.truthDSN, r.seeds(cycle.Topology.Brokers),
 		"orders."+cycle.ID, bytes.NewReader(run.logs.Bytes()), cycle.Topology.Consumers)
 	if err != nil {
 		return failed("CHECK", err)
 	}
 	run.row.Result, *damage = checker.Check(in)
+	if !run.faultEnd.IsZero() {
+		if seconds, ok := checker.RecoveryS(in, run.faultEnd); ok {
+			run.row.RecoveryS = strconv.FormatFloat(seconds, 'f', 3, 64)
+		}
+	}
 	if violation := assertionFailure(cycle, run.row.Result); violation != "" {
 		return &failure{"CONTROL_FAIL", errors.New(violation)}
 	}
@@ -329,16 +383,23 @@ func (r *Runner) prepare(run *cycleRun, seed uint64) error {
 	run.env = maps.Clone(cycle.Env)
 	run.env["CYCLE_ID"] = cycle.ID
 	run.env["PATTERN"] = cycle.Pattern
+	if cycle.Topology.Brokers == 3 {
+		run.env["KAFKA_BROKERS"] = "toxiproxy:19091,toxiproxy:19092,toxiproxy:19093"
+	}
 	run.components = []Spec{{Name: orderService, Image: serviceImage, Port: servicePort, MemoryBytes: goMemory}}
 	if cycle.Pattern == "P3" {
 		for i := 1; i <= cycle.Topology.Relays; i++ {
 			run.components = append(run.components, Spec{Name: relayName + strconv.Itoa(i), Image: relayImage, MemoryBytes: goMemory})
 		}
 	}
-	if cycle.Crash == nil {
+	point := cycle.Crash
+	if point == nil {
+		point = cycle.Stall
+	}
+	if point == nil {
 		return nil
 	}
-	afterN := cycle.Crash.AfterN
+	afterN := point.AfterN
 	if afterN == 0 {
 		var err error
 		if afterN, err = strconv.Atoi(cycle.Env["CRASH_AFTER_N"]); err != nil {
@@ -347,19 +408,26 @@ func (r *Runner) prepare(run *cycleRun, seed uint64) error {
 	}
 	rng := rand.New(rand.NewPCG(seed, seed+1))
 	run.row.CrashAfterN = afterN + rng.IntN(afterN+1)
-	run.row.CrashPoint = cycle.Crash.Point
-	run.row.Fault = "crash_point"
-	run.crashEnv = map[string]string{
-		"CRASH_AT":      cycle.Crash.Point,
-		"CRASH_AFTER_N": strconv.Itoa(run.row.CrashAfterN),
-		"ARM_ON_SIGNAL": "true",
+	run.row.CrashPoint = point.Point
+	run.pointEnv = map[string]string{"ARM_ON_SIGNAL": "true"}
+	if cycle.Crash != nil {
+		run.pointEnv["CRASH_AT"] = point.Point
+		run.pointEnv["CRASH_AFTER_N"] = strconv.Itoa(run.row.CrashAfterN)
+	} else {
+		run.pointEnv["STALL_AT"] = point.Point
+		run.pointEnv["STALL_AFTER_N"] = strconv.Itoa(run.row.CrashAfterN)
+		run.pointEnv["STALL_MS"] = strconv.Itoa(point.MS)
 	}
 	return nil
 }
 
-// crashTarget names the container a crash point runs in.
-func crashTarget(c Cycle) string {
-	if c.Crash != nil && c.Crash.Component == "relay" {
+// pointTarget names the container a crash or stall point runs in.
+func pointTarget(c Cycle) string {
+	point := c.Crash
+	if point == nil {
+		point = c.Stall
+	}
+	if point != nil && point.Component == "relay" {
 		return relayName + "1"
 	}
 	return orderService
@@ -370,14 +438,14 @@ func (r *Runner) startAll(ctx context.Context, run *cycleRun) error {
 	ctx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
 	if isCDC(run.cycle.Pattern) {
-		if err := r.createConnector(ctx, run.cycle); err != nil {
+		if err := r.createConnector(ctx, run.cycle, connector{}, r.measurement.PostgresDSN); err != nil {
 			return err
 		}
 	}
 	for _, component := range run.components {
 		env := maps.Clone(run.env)
-		if component.Name == crashTarget(run.cycle) {
-			maps.Copy(env, run.crashEnv)
+		if component.Name == pointTarget(run.cycle) {
+			maps.Copy(env, run.pointEnv)
 		}
 		if err := r.startComponent(ctx, component, env); err != nil {
 			return err
@@ -441,41 +509,6 @@ func hostLoad() float64 {
 	return load
 }
 
-// crashAndRecover arms the crash point now that warm-up is over, confirms the
-// crash, and recreates the component with the point cleared (recovery rule).
-func (r *Runner) crashAndRecover(ctx context.Context, run *cycleRun) error {
-	target := crashTarget(run.cycle)
-	faultCtx, cancel := context.WithTimeout(ctx, faultTimeout)
-	defer cancel()
-	if err := r.docker.Signal(faultCtx, target, "SIGUSR1"); err != nil {
-		return failed("FAULT", err)
-	}
-	if err := r.docker.WaitForLog(faultCtx, target, obs.CrashPointHit); err != nil {
-		_ = r.captureLogs(ctx, run, target)
-		return &failure{"INVALID_NO_CRASH", err}
-	}
-	recoverCtx, cancelRecover := context.WithTimeout(ctx, recoverTimeout)
-	defer cancelRecover()
-	code, err := r.docker.WaitForExit(recoverCtx, target)
-	if err != nil {
-		return failed("RECOVER", err)
-	}
-	if code != 137 {
-		return failed("RECOVER", fmt.Errorf("exit code %d, want 137 (SIGKILL)", code))
-	}
-	if err := r.captureLogs(recoverCtx, run, target); err != nil {
-		return failed("RECOVER", err)
-	}
-	for _, component := range run.components {
-		if component.Name == target {
-			if err := r.startComponent(recoverCtx, component, run.env); err != nil {
-				return failed("RECOVER", err)
-			}
-		}
-	}
-	return nil
-}
-
 func (r *Runner) captureLogs(ctx context.Context, run *cycleRun, name string) error {
 	logs, err := r.docker.Logs(ctx, name)
 	if err != nil {
@@ -508,11 +541,19 @@ func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
 	if err := r.removeConnectors(ctx); err != nil {
 		return err
 	}
+	if isCDC(cycle.Pattern) {
+		if err := r.ensureWorker(ctx, cycle); err != nil {
+			return err
+		}
+	}
 	conn, err := pgx.Connect(ctx, r.measurement.PostgresDSN)
 	if err != nil {
 		return fmt.Errorf("connect to postgres: %w", err)
 	}
 	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+	if err := setReplication(ctx, conn, cycle.Topology.Replication); err != nil {
+		return err
+	}
 	_, err = conn.Exec(ctx, `TRUNCATE orders, orders_history, outbox, consumer.payments_naive,
 		consumer.payments_dedup, consumer.processed_events, consumer.payments_upsert`)
 	if err != nil {
@@ -521,10 +562,10 @@ func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
 	if err := r.createTopic(ctx, cycle); err != nil {
 		return err
 	}
-	if err := r.toxics.ResetState(); err != nil {
+	if err := errors.Join(r.toxics.ResetState(), r.pgToxics.ResetState()); err != nil {
 		return fmt.Errorf("reset toxiproxy: %w", err)
 	}
-	return nil
+	return r.applyReplicationLatency(cycle)
 }
 
 func (r *Runner) createTopic(ctx context.Context, cycle Cycle) error {
@@ -589,10 +630,11 @@ func (r *Runner) waitHealthy(ctx context.Context) error {
 
 // drain waits until the topic's end offsets and the unsent outbox count stop
 // moving for quiet_s.
-func (r *Runner) drain(ctx context.Context, cycle Cycle) error {
+func (r *Runner) drain(ctx context.Context, run *cycleRun) error {
+	cycle := run.cycle
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cycle.Drain.TimeoutS)*time.Second)
 	defer cancel()
-	conn, err := pgx.Connect(ctx, r.measurement.PostgresDSN)
+	conn, err := pgx.Connect(ctx, run.truthDSN)
 	if err != nil {
 		return fmt.Errorf("connect to postgres: %w", err)
 	}

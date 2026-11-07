@@ -1,0 +1,1 @@
+time=2026-11-07T12:03:25.417+05:30 level=ERROR msg="runner failed" error="topic connect-configs is missing; recreate kafka-connect (docker compose rm -sfv kafka-connect && make up)"

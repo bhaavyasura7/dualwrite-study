@@ -8,7 +8,9 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
   chown -R postgres:postgres "$PGDATA"
   chmod 700 "$PGDATA"
   until pg_isready -h postgres-primary -U replicator; do sleep 1; done
-  gosu postgres pg_basebackup -h postgres-primary -U replicator -D "$PGDATA" \
+  # Through the pg-repl proxy, so replication lag can be injected (D-1).
+  until pg_isready -h toxiproxy-pg -p 15434 -U replicator; do sleep 1; done
+  gosu postgres pg_basebackup -h toxiproxy-pg -p 15434 -U replicator -D "$PGDATA" \
     -R -X stream -S replica_slot
 fi
 

@@ -1,0 +1,28 @@
+time=2026-11-07T11:23:33.323+05:30 level=INFO msg="run started" cycles=9 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m7d.csv
+time=2026-11-07T11:23:33.352+05:30 level=INFO msg="recreating kafka connect" offset_flush_ms=60000 eos=disabled
+time=2026-11-07T11:24:07.807+05:30 level=INFO msg="fault injected" cycle=E-3_P4_c1_r01 fault=crash target=connect
+time=2026-11-07T11:24:40.724+05:30 level=INFO msg="cycle finished" cycle=E-3_P4_c1_r01 n=1 of=9 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=67.389513125 load_s=40.844883542
+time=2026-11-07T11:24:40.745+05:30 level=INFO msg="recreating kafka connect" offset_flush_ms=60000 eos=enabled
+time=2026-11-07T11:25:37.335+05:30 level=INFO msg="fault injected" cycle=E-3_P4_c2_r01 fault=crash target=connect
+time=2026-11-07T11:26:10.144+05:30 level=INFO msg="cycle finished" cycle=E-3_P4_c2_r01 n=2 of=9 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=89.411253125 load_s=63.170596375
+time=2026-11-07T11:26:53.288+05:30 level=INFO msg="fault injected" cycle=E-3_P5_c2_r01 fault=crash target=connect
+time=2026-11-07T11:27:25.989+05:30 level=INFO msg="cycle finished" cycle=E-3_P5_c2_r01 n=3 of=9 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=75.839398792 load_s=62.949344666
+time=2026-11-07T11:28:04.728+05:30 level=INFO msg="fault injected" cycle=D-1_P1_r01 fault=failover target=postgres
+time=2026-11-07T11:28:30.207+05:30 level=ERROR msg="cycle failed" cycle=D-1_P1_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:28:40.622+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_r01 n=4 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=64.217337542 load_s=0
+time=2026-11-07T11:29:16.240+05:30 level=INFO msg="fault injected" cycle=D-1_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:29:41.721+05:30 level=ERROR msg="cycle failed" cycle=D-1_P3_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:29:52.302+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_r01 n=5 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=61.09832 load_s=0
+time=2026-11-07T11:29:52.368+05:30 level=INFO msg="recreating kafka connect" offset_flush_ms=60000 eos=disabled
+time=2026-11-07T11:30:33.438+05:30 level=INFO msg="fault injected" cycle=D-1_P4_r01 fault=failover target=postgres
+time=2026-11-07T11:30:58.942+05:30 level=ERROR msg="cycle failed" cycle=D-1_P4_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:31:09.619+05:30 level=INFO msg="cycle finished" cycle=D-1_P4_r01 n=6 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=66.639306583 load_s=0
+time=2026-11-07T11:31:41.165+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T11:32:06.581+05:30 level=ERROR msg="cycle failed" cycle=D-2_P5_c1_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:32:17.200+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r01 n=7 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=56.959564334 load_s=0
+time=2026-11-07T11:32:47.671+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r01 fault=failover target=postgres
+time=2026-11-07T11:33:13.139+05:30 level=ERROR msg="cycle failed" cycle=D-2_P5_c2_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:33:23.760+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r01 n=8 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=55.938227583 load_s=0
+time=2026-11-07T11:33:37.521+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:34:03.084+05:30 level=ERROR msg="cycle failed" cycle=D-3_P3_r01 status=FAILED_FAULT error="repoint pg-app: status 503"
+time=2026-11-07T11:34:13.424+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r01 n=9 of=9 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=39.323362625 load_s=0

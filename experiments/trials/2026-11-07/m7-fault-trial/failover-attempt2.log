@@ -1,0 +1,21 @@
+time=2026-11-07T11:35:00.912+05:30 level=INFO msg="run started" cycles=7 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/960ae5c8-9240-4c80-9f90-53624dd69927/scratchpad/m7e.csv
+time=2026-11-07T11:35:39.594+05:30 level=INFO msg="fault injected" cycle=D-1_P1_r01 fault=failover target=postgres
+time=2026-11-07T11:36:40.025+05:30 level=ERROR msg="cycle failed" cycle=D-1_P1_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:36:48.059+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_r01 n=1 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=99.104360291 load_s=0
+time=2026-11-07T11:37:24.914+05:30 level=INFO msg="fault injected" cycle=D-1_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:38:25.523+05:30 level=ERROR msg="cycle failed" cycle=D-1_P3_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:38:33.017+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_r01 n=2 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=97.463727042 load_s=0
+time=2026-11-07T11:39:01.041+05:30 level=INFO msg="fault injected" cycle=D-1_P4_r01 fault=failover target=postgres
+time=2026-11-07T11:40:01.564+05:30 level=ERROR msg="cycle failed" cycle=D-1_P4_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:40:09.276+05:30 level=INFO msg="cycle finished" cycle=D-1_P4_r01 n=3 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=88.5458615 load_s=0
+time=2026-11-07T11:40:37.437+05:30 level=INFO msg="fault injected" cycle=D-1_P5_r01 fault=failover target=postgres
+time=2026-11-07T11:41:37.909+05:30 level=ERROR msg="cycle failed" cycle=D-1_P5_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:41:45.529+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_r01 n=4 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=88.631674666 load_s=0
+time=2026-11-07T11:42:17.141+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T11:43:17.556+05:30 level=ERROR msg="cycle failed" cycle=D-2_P5_c1_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:43:25.378+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r01 n=5 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=92.025355875 load_s=0
+time=2026-11-07T11:43:56.879+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r01 fault=failover target=postgres
+time=2026-11-07T11:44:57.304+05:30 level=ERROR msg="cycle failed" cycle=D-2_P5_c2_r01 status=FAILED_FAULT error="repoint pg-app: context deadline exceeded"
+time=2026-11-07T11:45:05.210+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r01 n=6 of=7 status=FAILED_FAULT lost=0 hooked_lost=0 inflight=0 cycle_s=91.923874 load_s=0
+time=2026-11-07T11:45:20.855+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r01 fault=failover target=postgres
+time=2026-11-07T11:46:37.164+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r01 n=7 of=7 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=86.165759209 load_s=73.708342625

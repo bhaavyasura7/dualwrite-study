@@ -46,6 +46,9 @@ type Config struct {
 
 	RelayBatchSize    int           // RELAY_BATCH_SIZE, default 100
 	RelayPollInterval time.Duration // RELAY_POLL_INTERVAL_MS, default 500
+	// RelayDBTimeout bounds each relay database call. It matches HandlerTimeout, so
+	// the relay and the order service react alike to a dead database.
+	RelayDBTimeout time.Duration // RELAY_DB_TIMEOUT_MS, default 5000
 }
 
 // Topic returns the cycle's Kafka topic.
@@ -60,7 +63,7 @@ func Load() (Config, error) {
 		HTTPAddr:             str("HTTP_ADDR", ":8080"),
 		HandlerTimeout:       millis("HANDLER_TIMEOUT_MS", 5000, &errs),
 		ShutdownTimeout:      millis("SHUTDOWN_TIMEOUT_MS", 8000, &errs),
-		PostgresDSN:          str("POSTGRES_DSN", "postgres://app:app@toxiproxy:15432/shop"),
+		PostgresDSN:          str("POSTGRES_DSN", "postgres://app:app@toxiproxy-pg:15432/shop"),
 		PGMaxConns:           int32(integer("PG_MAX_CONNS", 20, &errs)),
 		KafkaBrokers:         strings.Split(str("KAFKA_BROKERS", "toxiproxy:19091"), ","),
 		KafkaAcks:            str("KAFKA_ACKS", "all"),
@@ -78,6 +81,7 @@ func Load() (Config, error) {
 		RetryCap:             millis("RETRY_CAP_MS", 5000, &errs),
 		RelayBatchSize:       integer("RELAY_BATCH_SIZE", 100, &errs),
 		RelayPollInterval:    millis("RELAY_POLL_INTERVAL_MS", 500, &errs),
+		RelayDBTimeout:       millis("RELAY_DB_TIMEOUT_MS", 5000, &errs),
 	}
 	if cfg.CycleID == "" {
 		errs = append(errs, errors.New("CYCLE_ID is required"))

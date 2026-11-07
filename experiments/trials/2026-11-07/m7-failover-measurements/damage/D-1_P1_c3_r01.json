@@ -1,0 +1,102 @@
+{
+  "lost": null,
+  "lost_detail": null,
+  "ghost": [
+    {
+      "order": "152adccb-5ed6-45fa-aa8f-8340d34c867e",
+      "seq": 2
+    },
+    {
+      "order": "23db3f2d-30f2-468f-94f8-e075b0d35778",
+      "seq": 1
+    },
+    {
+      "order": "24f815e7-f124-4e58-8dd1-5087a7e53850",
+      "seq": 2
+    },
+    {
+      "order": "2c10f8a0-b0d9-405c-86e3-79b84227023b",
+      "seq": 1
+    },
+    {
+      "order": "2cacc180-8770-42fb-ac66-e0efe14429db",
+      "seq": 2
+    },
+    {
+      "order": "43f66268-bcd8-4661-978b-d946bf288fbf",
+      "seq": 1
+    },
+    {
+      "order": "45832758-a109-4ac6-8181-19910887c9f1",
+      "seq": 1
+    },
+    {
+      "order": "4ad80bb2-7685-427f-83ad-30d9e344eefd",
+      "seq": 1
+    },
+    {
+      "order": "59849fd6-9c77-4277-a064-9f138984d23c",
+      "seq": 1
+    },
+    {
+      "order": "6aaf90f1-6d64-4891-a47d-69756637af10",
+      "seq": 2
+    },
+    {
+      "order": "78f67366-4ae9-453b-922e-96cb9206fc41",
+      "seq": 2
+    },
+    {
+      "order": "7eac2deb-b92c-479b-a010-38fee1831a22",
+      "seq": 2
+    },
+    {
+      "order": "925019fb-5511-4a73-81f2-0fcd2493e44f",
+      "seq": 1
+    },
+    {
+      "order": "a42566ca-a023-4e3e-bd0c-24c549401771",
+      "seq": 1
+    },
+    {
+      "order": "a9fb72c7-4ef7-4966-a01b-530fa15ff287",
+      "seq": 2
+    },
+    {
+      "order": "b3c4e4f9-6bf1-4214-bf2f-64cd92dc6b3b",
+      "seq": 2
+    },
+    {
+      "order": "b64f6f09-62f5-4aba-94c5-bd5dde31ea5f",
+      "seq": 2
+    },
+    {
+      "order": "bafc56b6-ac7e-4f6c-a690-09ecbef35609",
+      "seq": 1
+    },
+    {
+      "order": "d3a053da-a000-4512-8217-ac200b6a788d",
+      "seq": 1
+    },
+    {
+      "order": "dd0e4fde-b7bb-4441-a9bb-ec26a154e537",
+      "seq": 1
+    },
+    {
+      "order": "ee48d065-99fd-419a-bfd1-2bc8ac1df142",
+      "seq": 2
+    },
+    {
+      "order": "f5c1cdc6-f31e-4426-9e97-487d9b10c7bf",
+      "seq": 1
+    },
+    {
+      "order": "f5d3751f-7228-4b5b-ae73-c76b16485a78",
+      "seq": 1
+    }
+  ],
+  "duplicates": null,
+  "out_of_order": null,
+  "stale_redelivery": null,
+  "lost_after_send": null
+}

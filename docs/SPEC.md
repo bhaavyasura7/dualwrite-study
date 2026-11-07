@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 1.8 · November 2026"
+subtitle: "Go implementation · version 2.0 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -354,6 +354,7 @@ for {
 |---|---|---|
 | `RELAY_BATCH_SIZE` | 100 | A-7, I-2 |
 | `RELAY_POLL_INTERVAL_MS` | 500 | I-1 |
+| `RELAY_DB_TIMEOUT_MS` | 5000 | Limit on each relay database call. Matches the order service's request limit, so both react alike to a dead database, whose connections hang rather than fail |
 | Number of relay replicas | 1 (2/4 for ordering tests) | B-1, B-5, H-3 |
 
 The relay holds its transaction open while publishing so the row locks persist. This is intentional: it is what makes B-2 (lock released by Postgres's `idle_in_transaction_session_timeout` during a pause) possible.
@@ -481,6 +482,7 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 | inflight_at_crash / oldest_pending_ms | records with `SENT_CALLED` but no outcome at `CRASH_POINT_HIT`, and the age of the oldest |
 | relay_batches / batch_rows_mean / batch_rows_max | number of relay batches and the rows they actually held, from `RELAY_BATCH` markers (`phase=read`). The effective batch can be far below `RELAY_BATCH_SIZE` |
 | outbox_backlog_max | maximum unsent outbox rows, sampled every second (P3), so a relay falling behind is measured rather than inferred from the window |
+| failover_at / failover_lag_bytes / failover_lag_ms | when the primary was killed, and replication lag read just before it (D vectors) |
 | wal_retained_bytes_max | maximum `pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)` of the cycle's slot, sampled every second (P4/P5) |
 
 **Version history:** DB is built from `orders_history` (Section 5.1), which a trigger fills on every insert/update of `orders`. The trigger runs in all patterns, so its overhead is equal across them.
@@ -488,7 +490,7 @@ Let **DB** be the set of committed `(order_id, seq)` pairs (every version from 1
 ## 11.3 Outputs
 
 - One result struct appended to `results/results.csv` by the runner.
-- `results/damage/<cycle_id>.json`: the exact `(order_id, seq)` pairs for every damage class, used for root-cause analysis.
+- `results/damage/<cycle_id>.json`: the exact `(order_id, seq)` pairs for every damage class, used for root-cause analysis. Lost pairs also carry their commit time, the order's final version and whether they are intermediate versions.
 
 ## 11.4 Correctness requirements (control C0-2)
 
@@ -515,10 +517,12 @@ type Fault interface {
 | `latency` | Toxiproxy `latency` toxic (`latency`, `jitter`) on both streams of the group |
 | `withhold_downstream` | Toxiproxy `timeout` toxic with `timeout=0` on the **downstream** stream only: requests reach the server, responses never return (lost acknowledgements, F-2/F-3) |
 | `reset_peer` | Toxiproxy `reset_peer` toxic with `toxicity` = share of connections reset. Toxiproxy works on TCP streams and cannot drop packets; true packet loss would need `tc netem` and is out of scope for v1 |
-| `failover` | Kill primary → `SELECT pg_promote()` on the replica → repoint the `pg-app` and `pg-connect` proxies to the replica → apply `CDC_FAILOVER_RECOVERY` (Section 9.3). Applications reconnect through the same address |
+| `failover` | Kill primary → `SELECT pg_promote()` on the replica → the replica joins the `failover` network with the alias `postgres-primary`, so both pg proxies reach it by the name they already use → restart `toxiproxy-pg` → apply `CDC_FAILOVER_RECOVERY` (Section 9.3). Applications reconnect through the same address. Updating a live proxy's upstream stalls under load, because Toxiproxy dials upstream in its accept loop. The primary must die first: cutting traffic beforehand would let the replica catch up and hide ghost events |
 | `kill_leader` | Look up the leader of partition 0 with `kadm`, SIGKILL that broker |
 
-**After every failover cycle** (`requires_rebuild: true`) the runner rebuilds the original setup: recreate the primary from scratch (init scripts), re-seed the replica with `pg_basebackup`, and point both pg proxies back at the primary. The runner schedules all `requires_rebuild` vectors at the end of a run.
+**Network fault rule.** A network fault targets the publisher's path: `kafka-app` for P1–P3 and `kafka-connect` for P4–P5. Postgres latency uses `pg-app` for P1–P3 and both pg groups for P4–P5 (F-4, F-5).
+
+**After every failover cycle** (`requires_rebuild: true`) the runner rebuilds the original setup: recreate the primary from scratch (init scripts), and re-seed the replica with `pg_basebackup`. Recreating the replica removes the alias, so the proxies reach the new primary again. The runner schedules all `requires_rebuild` vectors at the end of a run.
 
 **Failover note:** with PostgreSQL 16, logical replication slots are not copied to the replica, so Debezium cannot simply resume after failover (vector D-2). PostgreSQL 17 can synchronise failover slots; testing PG16 vs PG17 is an optional extension.
 
@@ -567,6 +571,8 @@ RESET → START → WARMUP → FAULT → RECOVER → DRAIN → CHECK → RECORD 
 
 **Pre-cycle health check.** During the last 5 s of warm-up, before any fault is armed, the runner samples the Mac's load average, Postgres CPU and p99 latency, and records them as `pre_host_load`, `pre_db_cpu_pct` and `pre_p99_ms`. A cycle above `PRECHECK_MAX_P99_MS` (default 30) or `PRECHECK_MAX_HOST_LOAD` (default 8) gets `pre_flag` set to `latency`, `load` or both. It flags and never stops, so a spike can be traced to the machine or to the system.
 
+**No traffic means invalid.** If no request succeeded in the 5 s before a fault, the cycle is marked `INVALID_NO_LOAD`, because a fault on an idle system proves nothing. Every row records failed requests in `load_failed`.
+
 **Preflight.** The run refuses to start if Connect's internal topics are missing or the disk has under 20 GB free.
 
 Any timeout marks the cycle `FAILED_<STATE>`, saves its logs and moves on; one bad cycle never stops the run. A violated control `assert` marks `CONTROL_FAIL` and **does** stop the run. The runner is resumable: it skips cycles already present in `results.csv`.
@@ -585,9 +591,9 @@ hooked_lost, hooked_dup, collateral_lost, collateral_dup,
 business_damage_naive, business_damage_dedup, business_damage_upsert,
 wal_retained_bytes_max, outbox_backlog_max, relay_batches, batch_rows_mean, batch_rows_max,
 send_failed, crash_after_n, inflight_at_crash, oldest_pending_ms,
-host, shard, git_commit,
+failover_at, failover_lag_bytes, failover_lag_ms, host, shard, git_commit,
 window_p50_ms, window_p99_ms, window_max_ms, recovery_s,
-throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s,
+throughput_ops, latency_p50_ms, latency_p99_ms, db_cpu_pct, load_s, load_failed,
 pre_host_load, pre_db_cpu_pct, pre_p99_ms, pre_flag, started_at, finished_at
 ```
 
@@ -619,19 +625,22 @@ damage by pattern × fault (bars with 95% confidence intervals), a pattern × fa
 - All services `init: true` (crash hooks, Section 7).
 - Memory limits: Postgres 1 GB each, Kafka 1.5 GB per broker, Connect 1.5 GB, Go services 256 MB each. About 7 GB with one broker and about 9 GB with three (C-4). **Set Docker Desktop's memory to 12 GB** before the three-broker vectors.
 - Postgres replica bootstrapped with `pg_basebackup` in its entrypoint; streaming replication, asynchronous by default (synchronous for D-4).
+- Two Toxiproxy instances: `toxiproxy` for Kafka and `toxiproxy-pg` (API 8475) for Postgres. Toxiproxy dials upstream inside its accept loop, so one dial to a dead address blocks every new client for about 25 s. `toxiproxy-pg` is restarted at failover and after a rebuild, which clears that without touching Kafka traffic.
 - Toxiproxy proxies, grouped by client class so faults can target one side:
 
 | Group | Proxy (listen → upstream) | Used by |
 |---|---|---|
 | `pg-app` | 15432 → primary:5432 | order service, relay, consumers |
 | `pg-connect` | 15433 → primary:5432 | Kafka Connect |
+| `pg-repl` | 15434 → primary:5432 | Replica's streaming replication, so lag can be injected (`REPL_LATENCY_MS`, D-1) |
 | `kafka-app` | 1909N → broker-N:9092 (`APP` listener), one per broker | order service, relay, consumers |
 | `kafka-connect` | 1919N → broker-N:9094 (`CONNECT` listener), one per broker | Kafka Connect |
 
 - Clients connect to whatever address each broker **advertises**, so a single proxy cannot front three brokers. Each client class needs its **own broker listener and port**: `APP` on 9092 advertising `toxiproxy:1909N`, `CONNECT` on 9094 advertising `toxiproxy:1919N`. If both proxies pointed at 9092, the broker would advertise the app proxy to Connect and app-side faults would hit CDC too.
 - Measurement never goes through Toxiproxy: the checker and runner read Postgres directly and reach Kafka on `INTERNAL` (9093, in-network) or `HOST` (published to the Mac as `localhost:2909N`, because the host cannot resolve `broker-N`).
 - Kafka Connect uses its own internal topics (`connect-configs`, `connect-offsets`, `connect-status`), which are **not** reset per cycle; per-cycle connector names and slots keep cycles isolated.
-- Broker data lives on a named volume per broker (`kafka-N`). Without it, recreating a broker wipes Connect's internal topics and Connect floods its log (finding F0).
+- Broker data lives on named volumes, one set per topology (`kafka-1`; `kafka-b3-1` to `kafka-b3-3`). Without them, recreating a broker wipes Connect's internal topics and Connect floods its log (finding F0).
+- Each topology has its own Connect group and internal topics, with the replication factor set explicitly (1, or 3 with suffix `-b3`), so one-broker state cannot leak into the three-broker stack. Connect starts only after every broker is healthy. The three-broker volumes are wiped together whenever that topology starts, because a quorum cannot mix old and new storage.
 
 # 17. Testing the harness itself
 
@@ -665,7 +674,7 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 1.8
+# 20. Changes in versions 1.1 to 2.0
 
 | # | Area | Change |
 |---|---|---|
@@ -711,3 +720,11 @@ A run is only valid if all three levels pass on the same commit. Record the git 
 | 40 | 14.1 | (1.8) A-3r and C-3r: connection-reset variants that trigger the retry path during the outage; originals kept |
 | 41 | 14.1 | (1.8) A-7 prioritises poll-interval cells; 1,000/s cells depend on P-1 |
 | 42 | 15 | (1.8) Analysis rule: report with and without flagged cycles, all cycles primary |
+| 43 | 12 | (1.9) Failover moves the name `postgres-primary` by network alias instead of updating the proxies |
+| 44 | 12, 14.1 | (2.0) Network fault rule; F-4 and F-5 target the publisher's path per pattern |
+| 45 | 12, 14.1, 16 | (2.0) `pg-repl` proxy and D-1 sweep of `REPL_LATENCY_MS`; lag at failover recorded |
+| 46 | 8 | (2.0) `RELAY_DB_TIMEOUT_MS` |
+| 47 | 11.3 | (2.0) Lost pairs carry commit time and final version |
+| 48 | 16 | (2.0) Separate volumes, Connect topics and replication factors per topology |
+| 49 | 12, 16 | (2.0) Separate `toxiproxy-pg` instance, restarted at failover |
+| 50 | 14.2, 14.3 | (2.0) `INVALID_NO_LOAD` and `load_failed` |

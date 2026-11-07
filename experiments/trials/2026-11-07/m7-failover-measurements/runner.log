@@ -1,0 +1,46 @@
+time=2026-11-07T12:53:50.085+05:30 level=INFO msg="run started" cycles=18 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/m7k.csv
+time=2026-11-07T12:54:19.924+05:30 level=INFO msg="fault injected" cycle=D-1_P1_c1_r01 fault=failover target=postgres
+time=2026-11-07T12:54:57.291+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_c1_r01 n=1 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=61.114963209 load_s=50.3578525
+time=2026-11-07T12:55:34.692+05:30 level=INFO msg="fault injected" cycle=D-1_P1_c3_r01 fault=failover target=postgres
+time=2026-11-07T12:56:12.215+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_c3_r01 n=2 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=68.879227459 load_s=58.325402
+time=2026-11-07T12:56:34.000+05:30 level=INFO msg="fault injected" cycle=D-1_P1_c3_r02 fault=failover target=postgres
+time=2026-11-07T12:57:11.622+05:30 level=INFO msg="cycle finished" cycle=D-1_P1_c3_r02 n=3 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=53.412376292 load_s=42.88522525
+time=2026-11-07T12:57:32.649+05:30 level=INFO msg="fault injected" cycle=D-1_P3_c1_r01 fault=failover target=postgres
+time=2026-11-07T12:58:10.589+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_c1_r01 n=4 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=52.905420959 load_s=41.618598417
+time=2026-11-07T12:58:46.740+05:30 level=INFO msg="fault injected" cycle=D-1_P3_c1_r02 fault=failover target=postgres
+time=2026-11-07T12:59:24.181+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_c1_r02 n=5 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=67.622946417 load_s=56.775990792
+time=2026-11-07T12:59:51.244+05:30 level=INFO msg="fault injected" cycle=D-1_P3_c1_r03 fault=failover target=postgres
+time=2026-11-07T13:00:29.345+05:30 level=INFO msg="cycle finished" cycle=D-1_P3_c1_r03 n=6 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=59.065133292 load_s=47.723868625
+time=2026-11-07T13:01:09.690+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T13:01:09.706+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:01:58.662+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r01 n=7 of=18 status=OK lost=1861 hooked_lost=0 inflight=0 cycle_s=82.801447584 load_s=70.492443083
+time=2026-11-07T13:02:25.267+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r02 fault=failover target=postgres
+time=2026-11-07T13:02:25.279+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:03:03.884+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r02 n=8 of=18 status=OK lost=53 hooked_lost=0 inflight=0 cycle_s=58.879518083 load_s=47.602071583
+time=2026-11-07T13:03:28.356+05:30 level=INFO msg="fault injected" cycle=D-1_P5_c1_r03 fault=failover target=postgres
+time=2026-11-07T13:03:28.371+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:04:07.100+05:30 level=INFO msg="cycle finished" cycle=D-1_P5_c1_r03 n=9 of=18 status=OK lost=59 hooked_lost=0 inflight=0 cycle_s=56.864070791 load_s=45.567928666
+time=2026-11-07T13:04:37.576+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r01 fault=failover target=postgres
+time=2026-11-07T13:04:37.595+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:05:16.956+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r01 n=10 of=18 status=OK lost=71 hooked_lost=0 inflight=0 cycle_s=63.393236291 load_s=51.521095792
+time=2026-11-07T13:05:47.407+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r02 fault=failover target=postgres
+time=2026-11-07T13:05:47.420+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:06:26.513+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r02 n=11 of=18 status=OK lost=141 hooked_lost=0 inflight=0 cycle_s=63.325552042 load_s=51.938803666
+time=2026-11-07T13:06:56.934+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c1_r03 fault=failover target=postgres
+time=2026-11-07T13:06:56.949+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:07:45.466+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c1_r03 n=12 of=18 status=OK lost=1906 hooked_lost=0 inflight=0 cycle_s=72.330517833 load_s=61.016523208
+time=2026-11-07T13:08:15.953+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r01 fault=failover target=postgres
+time=2026-11-07T13:08:15.966+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:08:55.000+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r01 n=13 of=18 status=OK lost=25 hooked_lost=0 inflight=0 cycle_s=63.089639584 load_s=51.698071375
+time=2026-11-07T13:09:25.433+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r02 fault=failover target=postgres
+time=2026-11-07T13:09:25.446+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:10:13.805+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r02 n=14 of=18 status=OK lost=816 hooked_lost=0 inflight=0 cycle_s=72.485129459 load_s=61.195602875
+time=2026-11-07T13:10:44.241+05:30 level=INFO msg="fault injected" cycle=D-2_P5_c2_r03 fault=failover target=postgres
+time=2026-11-07T13:10:44.259+05:30 level=WARN msg="could not read replication lag" error="can't scan into dest[0] (col: pg_wal_lsn_diff): cannot scan NULL into *int64"
+time=2026-11-07T13:11:22.994+05:30 level=INFO msg="cycle finished" cycle=D-2_P5_c2_r03 n=15 of=18 status=OK lost=10 hooked_lost=0 inflight=0 cycle_s=62.748485584 load_s=51.494381834
+time=2026-11-07T13:11:36.275+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r01 fault=failover target=postgres
+time=2026-11-07T13:12:16.853+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r01 n=16 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=47.722814208 load_s=36.402718167
+time=2026-11-07T13:12:31.854+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r02 fault=failover target=postgres
+time=2026-11-07T13:13:12.482+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r02 n=17 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=49.5382425 load_s=38.158873417
+time=2026-11-07T13:13:26.858+05:30 level=INFO msg="fault injected" cycle=D-3_P3_r03 fault=failover target=postgres
+time=2026-11-07T13:14:06.868+05:30 level=INFO msg="cycle finished" cycle=D-3_P3_r03 n=18 of=18 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=48.345421083 load_s=37.523576125

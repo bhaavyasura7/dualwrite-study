@@ -175,6 +175,62 @@ Evidence: `experiments/trials/2026-11-07/m6-control-10min/`.
 
 P3's check in F16 read 275 ms while the full 10-minute p99 was 5.3 ms, with the Mac nearly idle. Earlier, 8 of 31 cycles were flagged at low host load. So these blips are not explained by use of the Mac. The cause is unknown.
 
+## F18. Harness artifact: Toxiproxy's accept loop inflated database downtime (Trial)
+
+Toxiproxy dials upstream inside its accept loop, so one dial to a dead address blocks every new client for about 25 s. That distorted failover twice: after the kill, and at the start of the next cycle, where many cycles had no working database for their first 20 s yet still reported OK. Fixed with a separate `toxiproxy-pg` instance, restarted at failover, plus `INVALID_NO_LOAD` and `load_failed`.
+
+| | Before | After |
+|---|---|---|
+| Failed requests per cycle | thousands | 64–97 |
+| P3 recovery after failover | 39–131 s | 0.2–0.5 s |
+
+So P3's slow recovery was never real. Two causes stacked: this artifact and our 60 s relay timeout.
+
+Evidence: `experiments/trials/2026-11-07/m7-failover-stuck-dial-artifact/` against `m7-failover-measurements/`.
+
+## F19. CDC failover loss has two parts: the slot gap and Debezium's retry wait (Trial)
+
+P5, 3 cycles each. D-1 and D-2's no-snapshot cell are the same configuration, and on the clean system they look alike, so the earlier 0 versus 58 was the artifact plus chance.
+
+| Cell | Lost | Duplicates |
+|---|---|---|
+| D-1 | 53, 59, 1,861 | 0 |
+| D-2, no snapshot | 71, 141, 1,906 | 0 |
+| D-2, initial snapshot | 10, 25, 816 | 2,940–3,005 |
+
+- **Slot gap (every cycle):** events committed on the new primary 0.5–1.4 s after failover, after the application reconnected and before the new slot existed.
+- **Retry wait (3 of 9 cycles):** the old task entered Debezium's retry wait, delaying connector deletion, so the new connector appeared 10.5 s after failover instead of about 0.85 s. Lost events then span up to 10.6 s. The log line "Going to restart connector after N sec" appears exactly 3 times, once per affected cycle. Those cycles also lost 12–84 events committed up to 0.48 s before failover; why only those cycles is not yet established.
+- **Snapshot:** all 851 lost events across the three snapshot cycles were intermediate versions (seq 1 with a later version existing). A snapshot restores each order's latest state, not its history.
+
+Evidence: `experiments/trials/2026-11-07/m7-failover-measurements/`, `analysis/diagnostics/failover_summary.py`.
+
+## F20. Ghost events appear only with replication lag (Trial)
+
+D-1 on P1: 0 ghosts with no added lag (lag at failover 0 bytes). At 200 ms: 23 and 16 ghosts, with 35–37 KB and about 400–530 ms of lag at failover. Two cycles at 200 ms, one at 0.
+
+## F21. Exactly-once removes connector-crash duplicates (Trial, single cycles)
+
+E-3 with the default 60 s flush: P4 without exactly-once gave 3,548 duplicates and 1,563 stale redeliveries; P4 and P5 with it gave 0 and 0. Throughput was unchanged at this load (178–180 ops/s). This answers spec Section 2's open question: exactly-once source mode works with Debezium 3.7 on Postgres here.
+
+Evidence: `experiments/trials/2026-11-07/m7-fault-trial/failover-and-eos-attempt1.csv`.
+
+## F22. Graceful and crash restarts of Connect differ sharply (Trial, single cycles)
+
+E-1 (restart): 0 duplicates. E-2 (crash), 1 s flush: 286 duplicates, against about 90 expected from rate × flush / 2. An earlier 5,425 came from our bug: the Debezium image overwrites `CONNECT_OFFSET_FLUSH_INTERVAL_MS`, so the worker stayed at 60 s. Now set through `OFFSET_FLUSH_INTERVAL_MS`.
+
+## F23. Faults reproduced on demand (Trial, single cycles)
+
+B-1: 1 out-of-order event. B-2: 89 duplicates, 35 out of order, 42 stale. F-3b: 96 duplicates despite the idempotent producer. A-3: 1,568 lost; A-3r: 1,261 lost; C-3r on P2: 3,182 lost; C-3 on P3: 0. C-1 on P1: 2,771 lost, equal to `send_failed`.
+C-4 on P1 lost 525–782 events with `acks=all`, all with `send_failed` or undelivered records, which is not what its hypothesis tests. See the pending `lost_after_ack` decision.
+
+## F24. With idempotence on, the same outage can lose everything in flight or nothing (Trial)
+
+P1, identical 8 s proxy cut at 100 orders/s, idempotence on: one run lost 1,551 events, the next lost 0 with `send_failed` 0 and a slowest delivery of 9.1 s. Earlier runs lost 1,072 to 1,554. With idempotence off, the cut lost about 1,500 in each of the three runs so far.
+
+So P1's loss under a cut is not a fixed function of outage length. The likely cause is whether requests were in flight when the connection died, but this is not confirmed. C-1 and C-2 need enough repeats to show the spread, and means alone would mislead. Reporting the distribution matters here.
+
+Evidence: `experiments/trials/2026-11-07/smoke-checker-intermittent/`, F1.
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.

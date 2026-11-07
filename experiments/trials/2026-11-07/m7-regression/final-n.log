@@ -1,0 +1,5 @@
+time=2026-11-07T13:26:36.953+05:30 level=INFO msg="run started" cycles=1 commit=637adf150c37-dirty results=/private/tmp/claude-501/-Users-likhith-Projects-capstone/a9fcb884-da02-4748-ba5f-400ac6001d58/scratchpad/m7n.csv
+time=2026-11-07T13:26:36.955+05:30 level=INFO msg="switching broker count" from=1 to=3
+time=2026-11-07T13:27:22.311+05:30 level=INFO msg="fault injected" cycle=C-4_P4_c1_r01 fault=kill_leader target=partition-0-leader
+time=2026-11-07T13:27:22.317+05:30 level=INFO msg="killing partition leader" cycle=C-4_P4_c1_r01 broker=dualwrite-broker-1-1
+time=2026-11-07T13:27:55.332+05:30 level=INFO msg="cycle finished" cycle=C-4_P4_c1_r01 n=1 of=1 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=58.00947425 load_s=44.805924709

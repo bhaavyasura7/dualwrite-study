@@ -217,7 +217,7 @@ func TestMerge(t *testing.T) {
 func TestConnectorConfig(t *testing.T) {
 	t.Chdir("../..")
 	for pattern, want := range map[string]string{"P4": `"orders.A-1b_P4_r02"`, "P5": `"orders.A-1b_P5_r02"`} {
-		raw, err := connectorConfig(Cycle{ID: "A-1b_" + pattern + "_r02", Pattern: pattern, Env: map[string]string{"KAFKA_ACKS": "all", "DEBEZIUM_POLL_INTERVAL_MS": "500"}}, "abc-1")
+		raw, err := connectorConfig(Cycle{ID: "A-1b_" + pattern + "_r02", Pattern: pattern, Env: map[string]string{"KAFKA_ACKS": "all", "DEBEZIUM_POLL_INTERVAL_MS": "500"}}, "abc-1", connector{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +226,7 @@ func TestConnectorConfig(t *testing.T) {
 		if err := json.Unmarshal(raw, &parsed); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(text, "_r02-abc-1\"") {
+		if !strings.Contains(text, `_r02-abc-1"`) {
 			t.Errorf("%s: name lacks the run id", pattern)
 		}
 		if strings.Contains(text, "{{") || !strings.Contains(text, want) || !strings.Contains(text, `"15433"`) {

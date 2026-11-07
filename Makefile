@@ -7,7 +7,8 @@ down: ## stop the stack, keeping data
 	docker compose down
 
 reset: ## stop the stack and delete all data
-	docker compose down -v
+	docker compose --profile brokers3 --profile app down -v --remove-orphans
+	docker volume rm -f dualwrite_kafka-b3-1 dualwrite_kafka-b3-2 dualwrite_kafka-b3-3
 
 ps:
 	docker compose ps

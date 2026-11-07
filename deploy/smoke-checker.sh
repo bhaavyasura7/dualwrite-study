@@ -41,6 +41,8 @@ check "checker saw every order" "$(field "$work/clean.load.json" orders)" "$(fie
 check "checker saw every version" "$(psql_ 'SELECT count(*) FROM orders_history')" "$(field "$work/clean.json" events_total)"
 
 echo "--- damaged cycle: Kafka cut for 8 s during load"
+# Idempotence off: with it on, the same cut sometimes loses nothing (finding F24).
+export KAFKA_IDEMPOTENT=false
 start_cycle "M3_outage_$(date +%s)"
 LOAD_RATE_PER_S=100 LOAD_DURATION_S=25 "$work/loadgen" > "$work/outage.load.json" &
 load=$!
@@ -56,6 +58,8 @@ check "every loss has a SEND_FAILED marker" "$failed" "$lost"
 check "lost events were all sent to the producer" "$lost" "$(field "$work/outage.json" lost_after_send)"
 check "no ghosts" 0 "$(field "$work/outage.json" ghost)"
 check "damage file lists each loss" "$lost" "$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))['lost']))" "$work/outage.damage.json")"
+
+unset KAFKA_IDEMPOTENT
 
 echo "--- guard: a topic without broker timestamps is refused"
 guard="M3_guard_$(date +%s)"

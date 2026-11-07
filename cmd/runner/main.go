@@ -44,6 +44,7 @@ func run() error {
 	allowDirty := flag.Bool("allow-dirty", false, "run on a dirty tree, marking the commit -dirty")
 	duration := flag.Int("duration", 0, "trial only: override load duration_s; recorded in env_json")
 	noConsumers := flag.Bool("no-consumers", false, "trial only: drop consumers; recorded in env_json")
+	only := flag.String("cycles", "", "comma-separated cycle IDs; empty runs all selected")
 	overrides := flag.String("env", "", "trial only: comma-separated KEY=VALUE overrides; recorded in env_json")
 	merge := flag.Bool("merge", false, "merge results/results.*.csv into results/results.csv")
 	flag.Parse()
@@ -78,6 +79,9 @@ func run() error {
 		return err
 	}
 	cycles := selectCycles(all, split(*vectors), split(*patterns), *repeats, shard, *perf)
+	if ids := split(*only); len(ids) > 0 {
+		cycles = slices.DeleteFunc(cycles, func(c runner.Cycle) bool { return !slices.Contains(ids, c.ID) })
+	}
 	for i := range cycles {
 		if *duration > 0 {
 			cycles[i].Load.DurationS = *duration
@@ -202,16 +206,17 @@ func selectCycles(all []runner.Cycle, vectors, patterns []string, repeats int, s
 		}
 		selected = append(selected, c)
 	}
-	// Failover cycles rebuild the database, so they run last (SPEC 12).
-	slices.SortStableFunc(selected, func(a, b runner.Cycle) int {
-		switch {
-		case a.RequiresRebuild == b.RequiresRebuild:
-			return 0
-		case a.RequiresRebuild:
-			return 1
+	// Failover cycles rebuild the database, so they run last (SPEC 12). Cycles are
+	// grouped by broker count and Connect worker configuration, which need a
+	// recreate to change.
+	rank := func(c runner.Cycle) string {
+		last := "0"
+		if c.RequiresRebuild {
+			last = "1"
 		}
-		return -1
-	})
+		return fmt.Sprint(last, c.Topology.Brokers, c.Env["CONNECT_EOS"], c.Env["OFFSET_FLUSH_MS"])
+	}
+	slices.SortStableFunc(selected, func(a, b runner.Cycle) int { return strings.Compare(rank(a), rank(b)) })
 	return selected
 }
 
