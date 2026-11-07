@@ -47,8 +47,9 @@ run-all: ## run the catalogue; SHARD=i/n runs this laptop's share
 merge: ## combine results/results.*.csv from all laptops into results.csv
 	go run ./cmd/runner -merge
 
-verify: ## check a results file: make verify FILE=results/results.csv
-	go run ./cmd/runner -verify $(or $(FILE),results/results.csv)
+verify: ## check a run: make verify RUN=results/runs/<commit>
+	cd $(RUN) && shasum -a 256 -c --quiet SHA256SUMS
+	go run ./cmd/runner -priority must -exclude-groups perf -verify $(RUN)/results.csv
 
 backup: ## push results/ to the private results repo
 	./deploy/backup.sh

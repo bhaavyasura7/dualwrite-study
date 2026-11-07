@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 2.5 · November 2026"
+subtitle: "Go implementation · version 2.6 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -639,7 +639,7 @@ Before any run used for results:
 
 `-allow-dirty` marks a run as a trial and skips the machine checks.
 
-**Randomised order.** Within each group of cycles that share a worker and broker configuration, the order is shuffled using the run seed, so slow drift such as heat cannot favour one pattern. Controls still run first and failover cycles last. The order is written to `<results>.order.txt` and each row's `run_order`.
+**Randomised order.** Within each group of cycles that share a worker and broker configuration, the order is shuffled using the run seed, so slow drift such as heat cannot favour one pattern. C0-1 runs strictly first, then the other controls, and failover cycles last. The order is written to `<results>.order.txt` and each row's `run_order`.
 
 **Sessions.** A run can be stopped and resumed, so the Mac can be used between sessions. `make pause`, or a first Ctrl-C, finishes the current cycle and stops. A second Ctrl-C stops at once; the interrupted cycle is discarded, not recorded as failed, and reruns on resume. Resuming is the same command. Correctness vectors (`make run-must`) and performance vectors (`make run-perf`) run in separate sessions, because P-1 needs a fully idle Mac.
 
@@ -648,6 +648,16 @@ Before any run used for results:
 **Thermal state.** Each cycle records macOS's thermal and performance warnings (`pmset -g therm`) in `thermal`, and flags the cycle if any is present. On Apple Silicon these are warning levels; no CPU speed limit is exposed without root, which is a stated limitation.
 
 **Backups.** Results go to a separate private repo (`dualwrite-results`), one folder per host. They are kept apart from the code because a commit in the code repo would change the hash recorded in running cycles, and the runner refuses to mix commits in one file.
+
+## 14.6 Results storage
+
+| Item | Where |
+|---|---|
+| Run directory | `results/runs/<commit>/` for real runs, `results/trials/<commit>/` for trials |
+| Manifest | `manifest.json`: commit, tag, seed, catalogue SHA-256, spec version, host, arguments. A resume into a directory with a different commit or seed is refused |
+| Records | `results.csv`, appended and fsynced one row per cycle; `results.order.txt`; `damage/` and `logs/` |
+| Checksums | `SHA256SUMS`, written by `make backup`; `make verify RUN=...` checks it and the rows |
+| Exclusions | `results/EXCLUDED.md` lists runs that must not be used, with the reason |
 
 # 15. Load generator (`cmd/loadgen`) and analysis
 
@@ -720,7 +730,7 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 2.5
+# 20. Changes in versions 1.1 to 2.6
 
 | # | Area | Change |
 |---|---|---|
@@ -783,3 +793,4 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 57 | 14.4, 14.5 | (2.3) `make verify`, `make backup`, `make demo`; results in a separate private repo |
 | 58 | 15 | (2.4) Window reported per load level; database CPU per 1,000 changes; anomalies need a cause before reporting |
 | 59 | 14.2 | (2.5) Randomised order within groups; resumable sessions; interrupted cycles discarded; thermal state per cycle |
+| 60 | 14.2, 14.6 | (2.6) C0-1 strictly first; run directories with manifest and checksums; exclusions list |

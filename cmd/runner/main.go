@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -146,12 +147,20 @@ func run() error {
 		return fmt.Errorf("hostname: %w", err)
 	}
 	host = strings.Split(host, ".")[0]
+	// Each run lives in its own directory, named by commit, with a manifest.
+	runDir := filepath.Join(resultsDir, "runs", commit)
+	if *allowDirty {
+		runDir = filepath.Join(resultsDir, "trials", commit)
+	}
 	path := *results
 	if path == "" {
-		path = filepath.Join(resultsDir, "results.csv")
+		path = filepath.Join(runDir, "results.csv")
 		if shard.Count > 0 {
-			path = filepath.Join(resultsDir, "results."+host+".csv")
+			path = filepath.Join(runDir, "results."+host+".csv")
 		}
+	}
+	if err := writeManifest(filepath.Dir(path), commit, *seed, *catalogue, os.Args[1:], host); err != nil {
+		return err
 	}
 	store, err := runner.OpenResults(path, commit)
 	if err != nil {
@@ -211,7 +220,8 @@ func run() error {
 		FixedSeed:     *fixedSeed,
 		StopRequested: stopping.Load,
 		Seed:          *seed,
-		ResultsDir:    resultsDir,
+		ResultsDir:    filepath.Dir(path),
+		StopFile:      filepath.Join(resultsDir, "STOP"),
 	}, docker, store)
 	if err != nil {
 		return err
@@ -232,12 +242,14 @@ func run() error {
 // In between, cycles are grouped by broker count and Connect worker
 // configuration, which need a recreate to change.
 func rank(c runner.Cycle) string {
-	order := "1"
+	order := "2"
 	switch {
+	case c.VectorID == "C0-1":
+		order = "0" // the no-fault control proves the setup before anything else
 	case c.Group == "control":
-		order = "0"
+		order = "1"
 	case c.RequiresRebuild:
-		order = "2"
+		order = "3"
 	}
 	return fmt.Sprint(order, c.Topology.Brokers, c.Env["CONNECT_EOS"], c.Env["OFFSET_FLUSH_MS"])
 }
@@ -271,6 +283,58 @@ func writeOrder(results string, cycles []runner.Cycle) error {
 		return fmt.Errorf("write run order: %w", err)
 	}
 	return nil
+}
+
+// manifest records what produced a run directory.
+type manifest struct {
+	Commit          string   `json:"commit"`
+	Tag             string   `json:"tag"`
+	Seed            uint64   `json:"seed"`
+	CatalogueSHA256 string   `json:"catalogue_sha256"`
+	Spec            string   `json:"spec"`
+	Host            string   `json:"host"`
+	Arguments       []string `json:"arguments"`
+	CreatedAt       string   `json:"created_at"`
+}
+
+// writeManifest creates the run directory's manifest, or checks that an existing
+// one belongs to the same commit and seed, so a resume can never mix builds.
+func writeManifest(dir, commit string, seed uint64, catalogue string, args []string, host string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create run directory: %w", err)
+	}
+	path := filepath.Join(dir, "manifest.json")
+	if raw, err := os.ReadFile(path); err == nil {
+		var existing manifest
+		if err := json.Unmarshal(raw, &existing); err != nil {
+			return fmt.Errorf("read manifest: %w", err)
+		}
+		if existing.Commit != commit || existing.Seed != seed {
+			return fmt.Errorf("%s belongs to commit %s seed %d, not %s seed %d", path, existing.Commit, existing.Seed, commit, seed)
+		}
+		return nil
+	}
+	content, err := os.ReadFile(catalogue)
+	if err != nil {
+		return fmt.Errorf("read catalogue: %w", err)
+	}
+	tag, _ := exec.Command("git", "describe", "--tags", "--exact-match").Output()
+	spec, _ := exec.Command("sed", "-n", "3p", "docs/SPEC.md").Output()
+	m := manifest{
+		Commit:          commit,
+		Tag:             strings.TrimSpace(string(tag)),
+		Seed:            seed,
+		CatalogueSHA256: fmt.Sprintf("%x", sha256.Sum256(content)),
+		Spec:            strings.TrimSpace(string(spec)),
+		Host:            host,
+		Arguments:       args,
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, raw, 0o644)
 }
 
 func verifyResults(path string, cycles []runner.Cycle) error {

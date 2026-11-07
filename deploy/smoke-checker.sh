@@ -54,7 +54,22 @@ finish_cycle outage
 lost=$(field "$work/outage.json" lost)
 failed=$(field "$work/outage.json" send_failed)
 [ "$lost" -gt 0 ] && echo "ok    outage produced lost events ($lost)" || { echo "FAIL  no lost events"; fail=1; }
-check "every loss has a SEND_FAILED marker" "$failed" "$lost"
+# Every loss must have a failure marker. The reverse need not hold: with
+# idempotence off, the client can give up on a record the broker stored (F30).
+unmarked=$(python3 - "$work/outage.log" "$work/outage.damage.json" <<'PY2'
+import json,sys
+sent,failed={},set()
+for l in open(sys.argv[1]):
+    try: e=json.loads(l)
+    except ValueError: continue
+    if e.get("msg")=="SENT_CALLED": sent[(e["order_id"],e["seq"])]=e["event_id"]
+    if e.get("msg")=="SEND_FAILED": failed.add(e["event_id"])
+lost=[(x["order"],x["seq"]) for x in json.load(open(sys.argv[2]))["lost"] or []]
+print(sum(1 for p in lost if sent.get(p) not in failed))
+PY2
+)
+check "every loss has a SEND_FAILED marker" 0 "$unmarked"
+[ "$failed" -ge "$lost" ] && echo "ok    failures cover losses ($failed failed, $lost lost)" || { echo "FAIL  fewer failures than losses"; fail=1; }
 check "lost events were all sent to the producer" "$lost" "$(field "$work/outage.json" lost_after_send)"
 check "no ghosts" 0 "$(field "$work/outage.json" ghost)"
 check "damage file lists each loss" "$lost" "$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))['lost']))" "$work/outage.damage.json")"

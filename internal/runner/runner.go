@@ -75,6 +75,7 @@ type Options struct {
 	Strict                           bool        // final runs: enforce the pre-run checklist (SPEC 14.5)
 	FixedSeed                        bool        // trial only: every cycle uses Seed, to measure run-to-run noise
 	StopRequested                    func() bool // true once the person asked to stop after this cycle
+	StopFile                         string      // its presence asks the run to stop after the current cycle
 	Seed                             uint64
 	ResultsDir                       string
 }
@@ -154,14 +155,11 @@ func Supported(c Cycle) error {
 	return nil
 }
 
-// stopFile asks a run to stop after the current cycle (make pause).
-const stopFile = "STOP"
-
 func (r *Runner) stopRequested() bool {
 	if r.opts.StopRequested != nil && r.opts.StopRequested() {
 		return true
 	}
-	_, err := os.Stat(filepath.Join(r.opts.ResultsDir, stopFile))
+	_, err := os.Stat(r.opts.StopFile)
 	return err == nil
 }
 

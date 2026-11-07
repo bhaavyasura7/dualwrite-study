@@ -335,6 +335,12 @@ So the paper should say: CDC loses events at PG16 failover because the slot is l
 
 Evidence: `experiments/trials/2026-11-07/cdc-retry-diagnostic/`, `f24-and-cdc-diagnostics/`, `analysis/diagnostics/cdc_retry.py`, `raw_topic_check.py`, `experiments/diagnostics.yaml`.
 
+## F30. The client can report failure for records the broker stored (Trial)
+
+P1, idempotence off, 8 s proxy cut: 1,594 `SEND_FAILED` markers against 1,592 lost events. Every lost event had a marker; 2 records reported as failed were in Kafka. With idempotence off, a request whose response is lost can be failed by the client after the broker wrote it. This is the mechanism behind F-2's duplicates when P2 retries such a record. Found by the acceptance gate, whose test had wrongly assumed failures and losses match one for one.
+
+Evidence: `experiments/trials/2026-11-07/smoke-checker-f30/`.
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.
