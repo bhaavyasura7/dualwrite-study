@@ -54,6 +54,7 @@ func connectorConfig(c Cycle, runID string, k connector) ([]byte, error) {
 		"{{acks}}", c.Env["KAFKA_ACKS"],
 		"{{poll_ms}}", c.Env["DEBEZIUM_POLL_INTERVAL_MS"],
 		"{{retry_wait_ms}}", c.Env["DEBEZIUM_RETRY_WAIT_MS"],
+		"{{heartbeat_ms}}", c.Env["DEBEZIUM_HEARTBEAT_MS"],
 	).Replace(string(raw))
 	var doc struct {
 		Name   string            `json:"name"`

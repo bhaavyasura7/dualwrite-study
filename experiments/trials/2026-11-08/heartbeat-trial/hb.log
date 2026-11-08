@@ -1,0 +1,3 @@
+time=2026-11-08T10:23:02.747+05:30 level=INFO msg="run started" cycles=2 commit=1d3fd36d8cfc-dirty results=results/trials/1d3fd36d8cfc-dirty/results.csv
+time=2026-11-08T11:23:44.949+05:30 level=INFO msg="cycle finished" cycle=C0-1_P4_r01 n=1 of=2 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=3642.190901084 load_s=3610.426855375
+time=2026-11-08T12:24:26.693+05:30 level=INFO msg="cycle finished" cycle=C0-1_P5_r01 n=2 of=2 status=OK lost=0 hooked_lost=0 inflight=0 cycle_s=3641.708842333 load_s=3610.455517583

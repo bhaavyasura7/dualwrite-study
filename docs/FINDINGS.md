@@ -341,6 +341,16 @@ P1, idempotence off, 8 s proxy cut: 1,594 `SEND_FAILED` markers against 1,592 lo
 
 Evidence: `experiments/trials/2026-11-07/smoke-checker-f30/`.
 
+## F31. On default settings, Postgres dropped Debezium's connection with no fault injected (observed on our test bed)
+
+C0-1 on P4 (study-v2), one hour, no fault: Postgres logged `terminating walsender process due to replication timeout` 4 times. Each time Debezium restarted and replayed from its last offset: 10,107 duplicates and 4,456 stale redeliveries, 0 lost. The naive consumer double-charged 3,374 times; dedup and upsert 0. Settings: Debezium 3.7 defaults (`heartbeat.interval.ms` 0; its log states that keepalive flushing is disabled) and Postgres's default 60 s `wal_sender_timeout`.
+
+Caveat and evidence: 3 of the 4 disconnects came within 0.2 s of a Postgres checkpoint completing; the fourth did not. Connect also committed no offsets between 12:22 and 12:33 UTC, so its task had stalled before the cut-off. The slow-COMMIT behaviour of this test bed (F27) may contribute. The mechanism is not proven. The 10-minute trials were too short to show it.
+
+Fix for the study: heartbeats every 10 s. Trial (`experiments/trials/2026-11-08/heartbeat-trial/`): C0-1 on P4 and P5, one hour each, 649,728 and 649,869 events, zero damage of every kind for all three consumers, 0 walsender timeouts, and 0 heartbeat records in the orders topics.
+
+Evidence: `results/runs/1d3fd36d8cfc/` (excluded from main results), Postgres log of that hour.
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.

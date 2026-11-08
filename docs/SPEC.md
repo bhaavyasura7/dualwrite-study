@@ -1,6 +1,6 @@
 ---
 title: "Technical Specification: Fault-Injection Study of Database–Kafka Consistency Patterns"
-subtitle: "Go implementation · version 2.6 · November 2026"
+subtitle: "Go implementation · version 2.7 · November 2026"
 ---
 
 # 1. Purpose and scope
@@ -419,6 +419,8 @@ Worker settings only take effect when Kafka Connect is recreated, so the runner 
 
 `poll.interval.ms` is set explicitly from `DEBEZIUM_POLL_INTERVAL_MS` (default 500) and recorded in `env_json`.
 
+`heartbeat.interval.ms` is 10,000 ms (`DEBEZIUM_HEARTBEAT_MS`), recorded in `env_json`. With Debezium's default of 0 and Postgres's 60 s `wal_sender_timeout`, the replication connection was dropped 4 times in a no-fault hour on P4 (finding F31). Heartbeats go to Debezium's own topic, created through Connect's `topic.creation.default.*` settings; the checker and consumers read only `orders.<cycle_id>`.
+
 `retriable.restart.connector.wait.ms` stays at Debezium's default of 10,000 ms, set from `DEBEZIUM_RETRY_WAIT_MS` and recorded in `env_json`. When a task enters this wait, deleting the connector takes about 10 s, which extends the failover loss window. Every report of CDC recovery times must state this setting.
 
 The templates in `deploy/connect/` also set what the study needs but this listing omits: `publication.autocreate.mode=disabled`, `snapshot.mode=no_data` (the cycle's tables are empty, and Debezium 3 replaced `never` with `no_data`), and converters. P4 uses `StringConverter` so the payload reaches Kafka as the common event schema. P5 uses `JsonConverter` without schemas and `decimal.handling.mode=double`.
@@ -730,7 +732,7 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 - No component reads another component's internal state; all evidence comes from Postgres, Kafka and logs.
 - Results, seeds, versions and the git commit are always recorded together. A number without them is not used in the paper.
 
-# 20. Changes in versions 1.1 to 2.6
+# 20. Changes in versions 1.1 to 2.7
 
 | # | Area | Change |
 |---|---|---|
@@ -794,3 +796,4 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 58 | 15 | (2.4) Window reported per load level; database CPU per 1,000 changes; anomalies need a cause before reporting |
 | 59 | 14.2 | (2.5) Randomised order within groups; resumable sessions; interrupted cycles discarded; thermal state per cycle |
 | 60 | 14.2, 14.6 | (2.6) C0-1 strictly first; run directories with manifest and checksums; exclusions list |
+| 61 | 9.3 | (2.7) Debezium heartbeats every 10 s, after C0-1 failed on P4 (F31) |
