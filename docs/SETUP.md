@@ -4,11 +4,13 @@ How to set up the college PC as the study's results machine (SPEC 2.1), connect 
 
 ```
 Mac (you, Claude, the code)                 College PC (Windows → WSL2 Ubuntu)
-  edit, commit, push   ── GitHub ──►          git pull ~/capstone
+  edit, commit, push   ── GitHub ──►          git fetch / checkout in ~/capstone
   ssh college-pc       ── Tailscale ──►       tmux session "study" runs the study
   git pull results     ◄── GitHub ──          the runner's hourly backup pushes
-  rsync dumps          ◄── Tailscale ──       ~/capstone/results/runs/.../dumps
+  rsync dumps + raw    ◄── Tailscale ──       ~/capstone/results/runs/<commit>/<session>/
 ```
+
+Steps 0–9 are done once. Section 10 is how you use the PC from the Mac every day.
 
 Everything here is free: WSL2 and Ubuntu, Docker Engine, Tailscale (personal plan), Go, git, tmux.
 
@@ -234,76 +236,179 @@ Restart the PC once and repeat this test. If it still works after a reboot, the 
 
 ## 10. Working from the Mac
 
-### Opening the session
+Everything in this section is typed **on the Mac**, in the Terminal app (or VS Code's terminal), unless it says otherwise. It all works only after step 9 passed.
 
-```bash
-ssh college-pc
-tmux new -As study        # creates "study" the first time, reattaches after that
-```
+### 10.1 How the connection works
 
-Inside tmux, anything you start keeps running when you close the laptop or lose wifi.
+Three tools, each with one job:
 
-| tmux key | What it does |
+| Tool | What it does for you |
 |---|---|
-| `Ctrl-b` then `d` | Detach: leave everything running and go back to the plain shell |
-| `tmux new -As study` | Reattach later |
-| `Ctrl-b` then `[` | Scroll back (arrow keys, `q` to stop) |
+| **Tailscale** | Puts the Mac and the PC on one private network, wherever each of them is. The PC is reachable by the name `college-pc` from home, from college, from a phone hotspot. Nothing is opened to the internet |
+| **SSH** | Gives you a terminal on the PC's Ubuntu from the Mac's terminal. `ssh college-pc` logs you in; `ssh college-pc '<command>'` runs one command there and prints its output here |
+| **tmux** | Keeps a terminal session alive **on the PC**. The study runs inside it, so closing the laptop, losing wifi or ending SSH never stops the run |
 
-Don't type `exit` inside tmux while a session runs; that closes it. Detach instead.
+Before each session, check that Tailscale is connected on the Mac (the Tailscale icon in the menu bar shows *Connected*, or `tailscale status` lists `college-pc`).
 
-### Getting new code onto the PC
-
-Commit and push on the Mac, then:
+### 10.2 Opening a terminal on the PC
 
 ```bash
-ssh college-pc 'cd ~/capstone && git pull && git log --oneline -1'
+ssh college-pc            # 1. log in: the prompt changes to <ubuntu-user>@<pc-name>
+tmux new -As study        # 2. join the session "study" (created the first time)
 ```
 
-During a study session the PC's `~/capstone` must stay at the study tag. **Never pull while a session is running.**
+You are now in the same terminal as the running study. To get out:
 
-### Running the study
+| You want to | Press or type |
+|---|---|
+| Leave, and keep everything running | `Ctrl-b`, release, then `d` (detach). Then `exit` to close SSH |
+| Come back later | `ssh college-pc`, then `tmux new -As study` again |
+| Scroll up through the output | `Ctrl-b`, then `[`; arrow keys or Page Up; `q` to stop |
+| See whether the session exists | `tmux ls` (on the PC) |
 
-Follow SPEC 14.7 in order: `make accept`, then the check run, then the freeze, then the sessions. Each session starts inside tmux:
+**Never type `exit` or press `Ctrl-c` inside the `study` session while the study runs.** `exit` closes the session and `Ctrl-c` stops the run. Always detach with `Ctrl-b d`.
+
+### 10.3 Running one command without logging in
+
+Put the command in quotes after `ssh college-pc`. It runs on the PC and the output appears on the Mac. Useful ones:
+
+| Purpose | Command |
+|---|---|
+| What the run is printing right now | `ssh college-pc 'tmux capture-pane -pt study \| tail -20'` |
+| Memory and disk | `ssh college-pc 'free -g; df -h ~'` |
+| Containers up | `ssh college-pc 'docker ps --format "{{.Names}} {{.Status}}"'` |
+| Cycles finished so far in a session | `ssh college-pc 'wc -l ~/capstone/results/runs/*/must/results.csv'` |
+| Last finished cycles | `ssh college-pc 'tail -3 ~/capstone/results/runs/*/must/results.csv \| cut -d, -f2,10'` |
+| Stop after the current cycle | `ssh college-pc 'cd ~/capstone && make pause'` |
+
+Replace `must` with `perf` or `should` for the other sessions.
+
+### 10.4 Looking at the PC's files in VS Code
+
+1. In VS Code on the Mac, open Extensions (`⌘⇧X`), search **Remote - SSH** (by Microsoft) and install it.
+2. Press `⌘⇧P`, type **Remote-SSH: Connect to Host**, choose **college-pc**. A new window opens; the first time it installs a small server on the PC (about a minute).
+3. **File → Open Folder** → `/home/<ubuntu-user>/capstone`.
+
+You can now browse results, open logs and use VS Code's terminal, all on the PC. Rules while a session runs: **read only**. Don't edit or save files in `~/capstone`, and don't run `git` there; any change to the tree breaks the frozen commit. Close the window when done.
+
+### 10.5 Getting code onto the PC
+
+Code always goes Mac → GitHub → PC, never edited on the PC.
+
+**On the Mac**, push the branch you want on the PC:
+
+```bash
+cd ~/Projects/capstone
+git push -u origin spec-2.9          # or whichever branch holds the candidate
+```
+
+**On the PC** (or through `ssh college-pc '...'`):
+
+```bash
+cd ~/capstone
+git fetch --all --tags
+git checkout spec-2.9 && git pull    # a candidate branch, for make accept and the check run
+git log --oneline -1                 # confirm the commit you expect
+```
+
+**For a real session**, check out the frozen tag instead (SPEC 14.7, step 6). The runner refuses to start unless `HEAD` is at the study tag and the tree is clean:
+
+```bash
+git checkout study-v4                # "detached HEAD" is expected here
+git status --short                   # must print nothing
+```
+
+**Never fetch, pull or check out anything in `~/capstone` while a session runs.**
+
+### 10.6 Running the study
+
+The order is fixed by SPEC 14.7: `make accept` → check run → freeze → **perf → must → should**. Each session starts inside tmux on the PC:
 
 ```bash
 ssh college-pc
 tmux new -As study
-cd ~/capstone && make up && make run-must     # later: make run-should, make run-perf
+cd ~/capstone
+make up                       # start the stack; wait for "healthy"
+./deploy/host-info.sh         # once, before the first session
+make run-perf                 # then, when it ends: make run-must, then make run-should
 # Ctrl-b d to detach
 ```
 
-`make run-should` and the per-session folders come with the v2.8 code (SPEC_NOTES, "Spec 2.8: code not yet matching the spec"). Until that code lands, only `make run-must` and `make run-perf` exist.
+A session ends by itself. Check that it finished (10.7), then start the next one the same way.
 
-### Checking progress without touching the PC
+`make run-should`, `deploy/host-info.sh` and the per-session folders come with the 2.8/2.9 code (`docs/SPEC_NOTES.md`). Until that code is merged they don't exist.
 
-On the Mac, from the backup (at most an hour old):
+### 10.7 Checking progress and results
+
+**From the backup** (no SSH needed, at most about an hour old). The runner pushes results to `dualwrite-results` between cycles, in a folder named after the PC's hostname:
 
 ```bash
 cd ~/Projects/dualwrite-results && git pull
+ls                                           # one folder per machine; the PC's is its Windows computer name
+ls <pc-name>/results/runs/<commit>/must/     # results.csv, results.order.txt, damage/, logs/
 ```
 
-Or live, without attaching:
+**Live**, with the commands in 10.3.
+
+**Through Claude**, see 10.10.
+
+### 10.8 Pausing and resuming
 
 ```bash
-ssh college-pc 'tmux capture-pane -pt study | tail -20'
-ssh college-pc 'free -g; df -h ~; docker ps --format "{{.Names}} {{.Status}}"'
+ssh college-pc 'cd ~/capstone && make pause'    # finishes the current cycle, then stops
 ```
 
-### Pausing and resuming
+To resume: open the session (10.2) and run the **same** `make run-...` command again. It skips finished cycles. After a power cut or a Windows restart, do the same; the cycle that was interrupted is thrown away and run again. If `ssh college-pc` fails after a restart, someone has to log in on the PC once (step 8).
+
+### 10.9 Copying topic dumps and raw data to the Mac
+
+Topic dumps and each cycle's raw data (SPEC 11.5) are too big for GitHub, so the Mac pulls them over Tailscale **at least once a day**. They are what lets a metric be recomputed later without running the study again, so don't skip this.
+
+Once, on the Mac, tell your shell where the Drive folder is. Use the path of your own Google Drive folder:
 
 ```bash
-ssh college-pc 'cd ~/capstone && make pause'    # stops after the current cycle
+echo 'export DRIVE_BACKUP_DIR="$HOME/Library/CloudStorage/GoogleDrive-<your account>/My Drive/dualwrite-backup"' >> ~/.zshrc
+source ~/.zshrc && mkdir -p "$DRIVE_BACKUP_DIR"
 ```
 
-To resume, attach to tmux and run the same `make run-...` command again; it skips finished cycles. After a power cut or reboot, do the same: the interrupted cycle is thrown away and rerun.
-
-### Copying topic dumps to the Mac (once a day)
-
-The dumps are too big for GitHub, so the Mac pulls them (SPEC 14.5):
+Then, each day:
 
 ```bash
 rsync -av college-pc:capstone/results/runs/ "$DRIVE_BACKUP_DIR/college-pc/runs/"
 ```
+
+`rsync` copies only what is new, so later runs are quick. It copies everything under `runs/`, including `dumps/` and `raw/`. To check a copy against the PC's checksums:
+
+```bash
+cd "$DRIVE_BACKUP_DIR/college-pc/runs/<commit>/must" && shasum -a 256 -c --quiet SHA256SUMS
+```
+
+(`SHA256SUMS` is rewritten at each backup, so files from cycles finished since then are not in it yet.)
+
+### 10.10 Using Claude from the Mac
+
+Claude runs only on the Mac. It reaches the PC the same way you do, with `ssh college-pc '...'`, so nothing of Claude's is installed on the PC.
+
+1. Open Claude Code in `~/Projects/capstone` on the Mac.
+2. Ask in plain words, for example:
+   - "How's the run on the college PC going?"
+   - "Why did cycle C-1_P4_c2_r03 fail? Check its logs on the PC."
+   - "Copy today's dumps and raw data to the Mac and verify them."
+3. Claude runs `ssh college-pc` commands, reads the output, and reports back. It asks before anything that changes the PC (pause, start a session, check out code).
+
+So Claude doesn't ask permission for every read-only SSH command, allow them once: in Claude Code type `/permissions`, add an **allow** rule `Bash(ssh college-pc:*)`, and save it to the project's local settings. You can remove it the same way.
+
+Claude follows the same rules as you: no `git` in `~/capstone` and no edits on the PC while a session runs. Code fixes are made on the Mac and only reach the PC through GitHub (10.5).
+
+### 10.11 Daily routine while the study runs
+
+1. `ssh college-pc 'tmux capture-pane -pt study | tail -20'`: is it still running, and with no repeated errors?
+2. `cd ~/Projects/dualwrite-results && git pull`: has the backup arrived in the last couple of hours?
+3. `rsync` the dumps and raw data (10.9).
+4. `ssh college-pc 'df -h ~'`: more than 20 GB free?
+5. Look for the signs of a harness fault listed in SPEC 14.7. If you see one, stop and decide with SPEC 14.7's rule whether it needs a fix-and-recompute or a new run.
+
+Or ask Claude to do all five ("do the daily check on the college PC").
 
 ---
 
