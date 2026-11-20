@@ -724,4 +724,4 @@ vectors:
     repeats: 5
     load: { duration_s: 120 }
     sweep: { load.rate_per_s: [10, 100, 1000] }
-    expect: Cost of each pattern in latency, throughput and DB CPU per 1,000 changes (RQ3). The window of P3-P5 changes with load, so it is reported at every rate.
+    expect: Cost of each pattern in latency, throughput and DB CPU per 1,000 committed changes (RQ5). The window of P3-P5 changes with load, so it is reported at every rate.
