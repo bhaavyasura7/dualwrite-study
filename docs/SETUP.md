@@ -329,14 +329,13 @@ ssh college-pc
 tmux new -As study
 cd ~/capstone
 make up                       # start the stack; wait for "healthy"
-./deploy/host-info.sh         # once, before the first session
 make run-perf                 # then, when it ends: make run-must, then make run-should
 # Ctrl-b d to detach
 ```
 
 A session ends by itself. Check that it finished (10.7), then start the next one the same way.
 
-`make run-should`, `deploy/host-info.sh` and the per-session folders come with the 2.8/2.9 code (`docs/SPEC_NOTES.md`). Until that code is merged they don't exist.
+The runner writes `host-info.txt` (the machine's details) into each session folder by itself. Before the real sessions, run the check run on the same commit: `make check-run`, then `make verify RUN=results/trials/<commit>-check` and `make recompute RUN=results/trials/<commit>-check` (SPEC 14.7).
 
 ### 10.7 Checking progress and results
 
