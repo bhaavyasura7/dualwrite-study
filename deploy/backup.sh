@@ -7,32 +7,36 @@ dest=${RESULTS_REPO_DIR:-../dualwrite-results}
 [ -d "$dest/.git" ] || { echo "no results repo at $dest" >&2; exit 1; }
 [ -d results ] || { echo "no results/ to back up" >&2; exit 1; }
 
-too_big=$(find results -type f -size +95M -not -path "*/dumps/*")
+too_big=$(find results -type f -size +95M -not -path "*/dumps/*" -not -path "*/raw/*")
 [ -z "$too_big" ] || { echo "too large for GitHub: $too_big" >&2; exit 1; }
 
-# Checksums for every run's files, so a restored copy can be verified.
-for run in results/runs/*/ results/trials/*/; do
-  [ -d "$run" ] || continue
-  (cd "$run" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS)
+# sha256sum on Linux, shasum on macOS; both write and check the same format.
+# An array, not a function: xargs runs programs, and would find the unrelated
+# system command "sum" instead of a shell function of that name.
+if command -v sha256sum >/dev/null; then SUM=(sha256sum); else SUM=(shasum -a 256); fi
+
+# Checksums for every session and trial directory (each has a manifest), so a
+# restored copy can be verified with make verify. The list is written outside
+# the directory first, so it never lists itself.
+find results/runs results/trials -name manifest.json 2>/dev/null | while read -r manifest; do
+  run=$(dirname "$manifest")
+  tmp=$(mktemp)
+  (cd "$run" && find . -type f ! -name SHA256SUMS ! -name '*.tmp' -print0 | sort -z | xargs -0 -r "${SUM[@]}" > "$tmp")
+  mv "$tmp" "$run/SHA256SUMS"
 done
 
 source_commit=$(git rev-parse --short=12 HEAD)
 host=$(hostname -s)
 mkdir -p "$dest/$host"
-# Topic dumps (SPEC 14.6) are too large for the results repo; they go to the
-# Drive folder in DRIVE_BACKUP_DIR only. SHA256SUMS above still covers them.
-rsync -a --exclude dumps/ results/ "$dest/$host/results/"
+# Topic dumps and raw files (SPEC 11.5) are too large for the results repo. On
+# the Mac they go to the Drive folder in DRIVE_BACKUP_DIR; on the results
+# machine the Mac pulls them with rsync (docs/SETUP.md, 10.9). SHA256SUMS above
+# covers them either way.
+rsync -a --exclude dumps/ --exclude raw/ --exclude '*.tmp' results/ "$dest/$host/results/"
 if [ -n "${DRIVE_BACKUP_DIR:-}" ]; then
-  for dumps in results/runs/*/dumps/ results/trials/*/dumps/; do
-    [ -d "$dumps" ] || continue
-    rel=${dumps#results/}
-    mkdir -p "$DRIVE_BACKUP_DIR/$host/$rel"
-    rsync -a --ignore-existing "$dumps" "$DRIVE_BACKUP_DIR/$host/$rel"
-    cp "${dumps%dumps/}SHA256SUMS" "$DRIVE_BACKUP_DIR/$host/${rel%dumps/}SHA256SUMS"
-  done
-  echo "dumps copied to Drive"
-elif ls -d results/runs/*/dumps results/trials/*/dumps >/dev/null 2>&1; then
-  echo "warning: DRIVE_BACKUP_DIR is not set; topic dumps were not backed up" >&2
+  mkdir -p "$DRIVE_BACKUP_DIR/$host"
+  rsync -a --exclude '*.tmp' results/ "$DRIVE_BACKUP_DIR/$host/results/"
+  echo "results, dumps and raw files copied to Drive"
 fi
 
 git -C "$dest" add -A

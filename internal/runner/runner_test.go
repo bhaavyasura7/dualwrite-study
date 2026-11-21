@@ -245,8 +245,10 @@ func TestVerify(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "results.csv")
 	results := &Results{path: path, done: map[string]struct{}{}}
 	dirty := row("a", "abc-dirty")
-	dirty.Status = "OK"
-	for _, r := range []Row{dirty, dirty, row("b", "def")} {
+	dirty.Status, dirty.Order, dirty.TruthSource = "OK", 1, "primary"
+	other := row("b", "def")
+	other.Order = 2
+	for _, r := range []Row{dirty, dirty, other} {
 		if err := results.Append(r); err != nil {
 			t.Fatal(err)
 		}
@@ -261,5 +263,36 @@ func TestVerify(t *testing.T) {
 	want := []string{"rows from a dirty tree: abc-dirty", "2 commits in one file", "cycle appears twice: a"}
 	if strings.Join(got.Problems, "|") != strings.Join(want, "|") {
 		t.Fatalf("problems = %q", got.Problems)
+	}
+}
+
+// TestVerifyOrderTruthAndCells covers the SPEC 14.8 checks: run_order must match
+// the seeded order, truth_source must match failover_at, and cells with under
+// 80% of their cycles OK are reported.
+func TestVerifyOrderTruthAndCells(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "results.csv")
+	results := &Results{path: path, done: map[string]struct{}{}}
+	cycles := []Cycle{{ID: "a", VectorID: "V", Pattern: "P1"}, {ID: "b", VectorID: "V", Pattern: "P1"}, {ID: "f", VectorID: "D", Pattern: "P1"}}
+	good := row("a", "abc")
+	good.Status, good.Order, good.TruthSource = "OK", 1, "primary"
+	misplaced := row("b", "abc")
+	misplaced.Status, misplaced.Order, misplaced.TruthSource = "FAILED_DRAIN", 3, "primary"
+	failover := row("f", "abc")
+	failover.Status, failover.Order, failover.TruthSource, failover.FailoverAt = "OK", 3, "primary", time.Now()
+	for _, r := range []Row{good, misplaced, failover} {
+		if err := results.Append(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := Verify(path, cycles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"cycle b has run_order 3, the seed gives 2", "cycle f: truth_source primary, want promoted_replica"}
+	if strings.Join(got.Problems, "|") != strings.Join(want, "|") {
+		t.Fatalf("problems = %q", got.Problems)
+	}
+	if len(got.Incomplete) != 1 || !strings.HasPrefix(got.Incomplete[0], "V P1 null: 1 of 2 OK") {
+		t.Fatalf("incomplete = %q", got.Incomplete)
 	}
 }

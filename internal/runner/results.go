@@ -2,6 +2,7 @@ package runner
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -414,12 +415,13 @@ func sortedKeys(m map[string]int) []string {
 
 // Summary describes a results file.
 type Summary struct {
-	Rows     int
-	Statuses map[string]int
-	Commits  []string
-	Versions int
-	Missing  []string // catalogue cycles without a row
-	Problems []string // anything that makes the file unusable for the paper
+	Rows       int
+	Statuses   map[string]int
+	Commits    []string
+	Versions   int
+	Missing    []string // catalogue cycles without a row
+	Incomplete []string // cells with under 80% of planned cycles OK (SPEC 14.8)
+	Problems   []string // anything that makes the file unusable for the paper
 }
 
 // Verify checks a results file against the expected cycles.
@@ -456,9 +458,44 @@ func Verify(path string, expected []Cycle) (Summary, error) {
 			summary.Problems = append(summary.Problems, "cycle appears twice: "+id)
 		}
 	}
-	for _, cycle := range expected {
+	position := make(map[string]int, len(expected))
+	planned := make(map[string]int)
+	cellOf := make(map[string]string, len(expected))
+	for i, cycle := range expected {
+		position[cycle.ID] = i + 1
+		sweep, _ := json.Marshal(cycle.Sweep)
+		cell := cycle.VectorID + " " + cycle.Pattern + " " + string(sweep)
+		cellOf[cycle.ID] = cell
+		planned[cell]++
 		if seen[cycle.ID] == 0 {
 			summary.Missing = append(summary.Missing, cycle.ID)
+		}
+	}
+	ok := make(map[string]int)
+	for _, row := range rows {
+		id := row["cycle_id"]
+		want, expectedHere := position[id]
+		if !expectedHere {
+			summary.Problems = append(summary.Problems, "row for a cycle outside the selection: "+id)
+			continue
+		}
+		if row["run_order"] != strconv.Itoa(want) {
+			summary.Problems = append(summary.Problems, fmt.Sprintf("cycle %s has run_order %s, the seed gives %d", id, row["run_order"], want))
+		}
+		if row["status"] == "OK" {
+			ok[cellOf[id]]++
+			truth := "primary"
+			if row["failover_at"] != "" {
+				truth = "promoted_replica"
+			}
+			if row["truth_source"] != truth {
+				summary.Problems = append(summary.Problems, fmt.Sprintf("cycle %s: truth_source %s, want %s", id, row["truth_source"], truth))
+			}
+		}
+	}
+	for _, cell := range slices.Sorted(maps.Keys(planned)) {
+		if ok[cell]*5 < planned[cell]*4 {
+			summary.Incomplete = append(summary.Incomplete, fmt.Sprintf("%s: %d of %d OK", cell, ok[cell], planned[cell]))
 		}
 	}
 	return summary, nil

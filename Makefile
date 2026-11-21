@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all run-must run-perf pause merge verify backup demo
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all run-must run-should run-perf check-run pause merge verify recompute backup demo
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -47,9 +47,14 @@ run-all: ## run the catalogue; SHARD=i/n runs this laptop's share
 merge: ## combine results/results.*.csv from all laptops into results.csv
 	go run ./cmd/runner -merge
 
-verify: ## check a run: make verify RUN=results/runs/<commit>
-	cd $(RUN) && shasum -a 256 -c --quiet SHA256SUMS
-	go run ./cmd/runner -priority must -exclude-groups perf -verify $(RUN)/results.csv
+verify: ## check a session or trial: make verify RUN=results/runs/<commit>/must
+	@test -n "$(RUN)" || { echo "usage: make verify RUN=<session or trial directory>"; exit 1; }
+	cd $(RUN) && if command -v sha256sum >/dev/null; then sha256sum -c --quiet SHA256SUMS; else shasum -a 256 -c --quiet SHA256SUMS; fi
+	go run ./cmd/runner -verify $(RUN)
+
+recompute: ## recompute every metric from raw files and compare: make recompute RUN=<dir>
+	@test -n "$(RUN)" || { echo "usage: make recompute RUN=<session or trial directory>"; exit 1; }
+	go run ./cmd/recompute -dir $(RUN) -check
 
 backup: ## push results/ to the private results repo
 	./deploy/backup.sh
@@ -58,11 +63,17 @@ demo: up ## one crash cycle end to end; writes results/demo.csv
 	go run ./cmd/runner -cycles A-1_P1_r01 -allow-dirty -results results/demo.csv
 	@python3 -c "import csv; [print({k: r[k] for k in ('cycle_id', 'status', 'events_total', 'lost', 'ghost', 'duplicates')}) for r in csv.DictReader(open('results/demo.csv'))]"
 
-run-must: ## final must-run correctness vectors; resumable, stop with make pause
-	caffeinate -i go run ./cmd/runner -priority must -exclude-groups perf $(ARGS)
+run-must: ## paper-run session "must" (SPEC 14.7); resumable, stop with make pause
+	./deploy/keep-awake.sh go run ./cmd/runner -session must
 
-run-perf: ## performance vectors (P-1) on their own; the Mac must be fully idle
-	caffeinate -i go run ./cmd/runner -vectors P-1 $(ARGS)
+run-should: ## paper-run session "should"; resumable
+	./deploy/keep-awake.sh go run ./cmd/runner -session should
+
+run-perf: ## paper-run session "perf" (P-1); nobody may use the machine meanwhile
+	./deploy/keep-awake.sh go run ./cmd/runner -session perf
+
+check-run: ## the check run of SPEC 14.7, on the clean candidate, into results/trials/<commit>-check
+	./deploy/keep-awake.sh go run ./cmd/runner -check-run $(ARGS)
 
 pause: ## stop the running run after its current cycle; rerun to resume
 	touch results/STOP

@@ -81,6 +81,9 @@ type Options struct {
 	StopFile                         string      // its presence asks the run to stop after the current cycle
 	Seed                             uint64
 	ResultsDir                       string
+	// Backups run between cycles, never during one (SPEC 14.5).
+	BackupEvery time.Duration
+	Backup      func(context.Context) error
 }
 
 // Runner executes cycles.
@@ -208,7 +211,17 @@ func (r *Runner) Preflight(ctx context.Context) error {
 // Run executes the cycles in order, skipping those already recorded. One bad
 // cycle never stops the run; a failed control does.
 func (r *Runner) Run(ctx context.Context, cycles []Cycle) error {
+	lastBackup := time.Now()
+	defer func() {
+		if ctx.Err() == nil {
+			r.backup(context.WithoutCancel(ctx)) // the session's last rows
+		}
+	}()
 	for i, cycle := range cycles {
+		if r.opts.BackupEvery > 0 && time.Since(lastBackup) >= r.opts.BackupEvery {
+			r.backup(ctx)
+			lastBackup = time.Now()
+		}
 		if r.results.Done(cycle.ID) {
 			continue
 		}
@@ -245,6 +258,23 @@ func (r *Runner) Run(ctx context.Context, cycles []Cycle) error {
 		}
 	}
 	return nil
+}
+
+// backup runs the backup between cycles and logs its time, which is excluded
+// from every cycle's measurements. A failed backup is logged and the run goes
+// on: the results stay on disk and the next backup includes them.
+func (r *Runner) backup(ctx context.Context) {
+	if r.opts.Backup == nil {
+		return
+	}
+	began := time.Now()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	if err := r.opts.Backup(ctx); err != nil {
+		slog.Error("backup failed; results are still on disk", "error", err, "backup_s", time.Since(began).Seconds())
+		return
+	}
+	slog.Info("backup done", "backup_s", time.Since(began).Seconds())
 }
 
 // cycleRun holds one cycle's working state.
