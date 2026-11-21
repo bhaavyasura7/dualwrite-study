@@ -19,30 +19,57 @@ type Pair struct {
 // Version is one row of orders_history.
 type Version struct {
 	Pair
+	Status     string    `json:"status,omitempty"`
 	CommitTime time.Time `json:"commit_time"`
+	// CommitMissing is set when Postgres returned no commit time (SPEC 5.1).
+	CommitMissing bool `json:"commit_missing,omitempty"`
 }
 
 // Record is one Kafka record.
 type Record struct {
 	Pair
+	EventID   string    `json:"event_id,omitempty"` // empty for P5
 	Partition int32     `json:"partition"`
 	Offset    int64     `json:"offset"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// Order is an order's final state in the truth, for business damage.
+type Order struct {
+	OrderID     string `json:"order"`
+	Status      string `json:"status"`
+	AmountCents int64  `json:"amount_cents"`
+}
+
+// Payment is one row of a consumer payment table.
+type Payment struct {
+	PaymentID   int64  `json:"payment_id"`
+	OrderID     string `json:"order"`
+	EventKey    string `json:"event_key"`
+	AmountCents int64  `json:"amount_cents"`
+}
+
+// windowTolerance is how far a first delivery may precede its commit time
+// before the pair counts as impossible (SPEC 5.1): broker and Postgres share
+// the host's clock, and broker timestamps have millisecond resolution.
+const windowTolerance = 5 * time.Millisecond
+
 // Input is everything one cycle produced.
 type Input struct {
-	DB              []Version      `json:"db"`
-	Kafka           []Record       `json:"kafka"`
-	Sent            []Pair         `json:"sent"`        // SENT_CALLED markers
-	Acked           []Pair         `json:"acked"`       // pairs with a SEND_ACKED marker
-	Hooked          []Pair         `json:"hooked"`      // events named by CRASH_POINT_HIT
-	SendFailed      int            `json:"send_failed"` // SEND_FAILED markers
-	InflightAtCrash int            `json:"inflight_at_crash"`
-	OldestPendingMS float64        `json:"oldest_pending_ms"`
-	BatchRows       []int          `json:"batch_rows"`  // rows per relay batch, from RELAY_BATCH
-	Payments        map[string]int `json:"payments"`    // rows per consumer strategy; nil outside group G
-	PaidOrders      int            `json:"paid_orders"` // orders whose final status is PAID
+	DB              []Version `json:"db"`
+	Kafka           []Record  `json:"kafka"`
+	Sent            []Pair    `json:"sent"`        // SENT_CALLED markers
+	Acked           []Pair    `json:"acked"`       // pairs with a SEND_ACKED marker
+	Hooked          []Pair    `json:"hooked"`      // events named by CRASH_POINT_HIT
+	SendFailed      int       `json:"send_failed"` // SEND_FAILED markers
+	InflightAtCrash int       `json:"inflight_at_crash"`
+	OldestPendingMS float64   `json:"oldest_pending_ms"`
+	BatchRows       []int     `json:"batch_rows"` // rows per relay batch, from RELAY_BATCH
+	// Business damage inputs (group G); Payments is nil outside group G.
+	Orders   []Order              `json:"orders,omitempty"`
+	Payments map[string][]Payment `json:"payments,omitempty"` // by strategy
+	// MarkerIDs are the drain markers' order IDs, excluded from everything (SPEC 9.4).
+	MarkerIDs []string `json:"marker_ids,omitempty"`
 }
 
 // Result holds the metrics of Section 11.2. Names match the results CSV.
@@ -68,13 +95,44 @@ type Result struct {
 	InflightAtCrash int     `json:"inflight_at_crash"`
 	OldestPendingMS float64 `json:"oldest_pending_ms"`
 	// Actual relay batch sizes, which can be far below RELAY_BATCH_SIZE.
-	RelayBatches   int            `json:"relay_batches"`
-	BatchRowsMean  float64        `json:"batch_rows_mean"`
-	BatchRowsMax   int            `json:"batch_rows_max"`
-	BusinessDamage map[string]int `json:"business_damage,omitempty"`
-	WindowP50MS    float64        `json:"window_p50_ms"`
-	WindowP99MS    float64        `json:"window_p99_ms"`
-	WindowMaxMS    float64        `json:"window_max_ms"`
+	RelayBatches  int     `json:"relay_batches"`
+	BatchRowsMean float64 `json:"batch_rows_mean"`
+	BatchRowsMax  int     `json:"batch_rows_max"`
+	// Business holds the per-order damage classes by strategy (SPEC 11.2).
+	Business    map[string]Business `json:"business,omitempty"`
+	WindowP50MS float64             `json:"window_p50_ms"`
+	WindowP99MS float64             `json:"window_p99_ms"`
+	WindowMaxMS float64             `json:"window_max_ms"`
+	// Commit-time safeguards (SPEC 5.1). When either count is above zero the
+	// window is left empty and WindowInvalid is set.
+	CommitTSMissing int  `json:"commit_ts_missing"`
+	WindowNegative  int  `json:"window_negative"`
+	WindowInvalid   bool `json:"window_invalid"`
+}
+
+// Business is one strategy's damage classes. Each payment row is in at most one
+// row class and each paid order at most once in Missing, so none can cancel
+// another (SPEC 11.2).
+type Business struct {
+	Missing      int `json:"missing_payments"`
+	Duplicate    int `json:"duplicate_payments"`
+	Unexpected   int `json:"unexpected_payments"`
+	WrongAmount  int `json:"incorrect_payment_amounts"`
+	WrongMapping int `json:"incorrect_order_mappings"`
+}
+
+// Total is business_damage_<strategy>.
+func (b Business) Total() int {
+	return b.Missing + b.Duplicate + b.Unexpected + b.WrongAmount + b.WrongMapping
+}
+
+// BusinessDetail lists the orders and payment rows behind each class.
+type BusinessDetail struct {
+	Missing      []string `json:"missing_orders"`
+	Duplicate    []int64  `json:"duplicate_payment_ids"`
+	Unexpected   []int64  `json:"unexpected_payment_ids"`
+	WrongAmount  []int64  `json:"wrong_amount_payment_ids"`
+	WrongMapping []int64  `json:"wrong_mapping_payment_ids"`
 }
 
 // Damage lists the exact pairs behind each metric, for root-cause analysis.
@@ -91,6 +149,10 @@ type Damage struct {
 	StaleRedelivery []Pair       `json:"stale_redelivery"`
 	LostAfterSend   []Pair       `json:"lost_after_send"`
 	LostAfterAck    []Pair       `json:"lost_after_ack"`
+	// Versions left out of the window: no commit time, or delivered before it.
+	CommitTSMissing []Pair                    `json:"commit_ts_missing,omitempty"`
+	WindowNegative  []Pair                    `json:"window_negative,omitempty"`
+	Business        map[string]BusinessDetail `json:"business,omitempty"`
 }
 
 // SlotSample is one reading of a replication slot.
@@ -113,6 +175,7 @@ type LostEvent struct {
 
 // Check computes the cycle's metrics. Input order does not matter.
 func Check(in Input) (Result, Damage) {
+	in = withoutMarkers(in)
 	var damage Damage
 	result := Result{
 		EventsTotal:     len(in.DB),
@@ -196,21 +259,46 @@ func Check(in Input) (Result, Damage) {
 	result.LostAfterSend = len(damage.LostAfterSend)
 	result.LostAfterAck = len(damage.LostAfterAck)
 
-	windows := make([]float64, 0, len(first))
-	for pair, seen := range first {
-		if commit, ok := committed[pair]; ok {
-			windows = append(windows, float64(seen.Sub(commit))/float64(time.Millisecond))
+	missing := make(map[Pair]bool)
+	for _, v := range in.DB {
+		if v.CommitMissing {
+			missing[v.Pair] = true
 		}
 	}
-	slices.Sort(windows)
-	result.WindowP50MS = obs.Percentile(windows, 50)
-	result.WindowP99MS = obs.Percentile(windows, 99)
-	result.WindowMaxMS = obs.Percentile(windows, 100)
+	damage.CommitTSMissing = slices.SortedFunc(maps.Keys(missing), comparePairs)
+	windows := make([]float64, 0, len(first))
+	for _, pair := range sortedKeys(first) {
+		commit, ok := committed[pair]
+		if !ok || missing[pair] {
+			continue
+		}
+		window := first[pair].Sub(commit)
+		if window < -windowTolerance {
+			damage.WindowNegative = append(damage.WindowNegative, pair)
+			continue
+		}
+		windows = append(windows, float64(window)/float64(time.Millisecond))
+	}
+	result.CommitTSMissing = len(damage.CommitTSMissing)
+	result.WindowNegative = len(damage.WindowNegative)
+	if result.CommitTSMissing+result.WindowNegative > 0 {
+		// A wrong timestamp would silently distort the window: leave it empty.
+		result.WindowInvalid = true
+	} else {
+		slices.Sort(windows)
+		result.WindowP50MS = obs.Percentile(windows, 50)
+		result.WindowP99MS = obs.Percentile(windows, 99)
+		result.WindowMaxMS = obs.Percentile(windows, 100)
+	}
 
 	if in.Payments != nil {
-		result.BusinessDamage = make(map[string]int, len(in.Payments))
+		result.Business = make(map[string]Business, len(in.Payments))
+		damage.Business = make(map[string]BusinessDetail, len(in.Payments))
+		resolve := resolver(in.Kafka)
+		paidSeq := paidVersions(in.DB, finalVersion)
 		for strategy, rows := range in.Payments {
-			result.BusinessDamage[strategy] = max(rows-in.PaidOrders, in.PaidOrders-rows)
+			counts, detail := businessDamage(in.Orders, paidSeq, rows, resolve)
+			result.Business[strategy], damage.Business[strategy] = counts, detail
 		}
 	}
 	return result, damage
@@ -242,29 +330,6 @@ func ordering(records []Record) (outOfOrder, stale []Pair) {
 	return outOfOrder, stale
 }
 
-// RecoveryS is the time from faultEnd until every version committed by then had
-// reached Kafka. It is computed afterwards from broker timestamps, which gives the
-// same answer as sampling during the drain. ok is false if any is still lost.
-func RecoveryS(in Input, faultEnd time.Time) (seconds float64, ok bool) {
-	first := make(map[Pair]time.Time, len(in.Kafka))
-	for _, r := range in.Kafka {
-		if t, seen := first[r.Pair]; !seen || r.Timestamp.Before(t) {
-			first[r.Pair] = r.Timestamp
-		}
-	}
-	for _, v := range in.DB {
-		if v.CommitTime.After(faultEnd) {
-			continue
-		}
-		delivered, found := first[v.Pair]
-		if !found {
-			return 0, false
-		}
-		seconds = max(seconds, delivered.Sub(faultEnd).Seconds())
-	}
-	return seconds, true
-}
-
 // LateDeliveries counts versions committed before the moment whose first copy
 // reached Kafka after it: events still in flight when a fault struck.
 func LateDeliveries(in Input, moment time.Time) int {
@@ -291,8 +356,10 @@ func toSet(pairs []Pair) map[Pair]struct{} {
 	return set
 }
 
+func comparePairs(a, b Pair) int {
+	return cmp.Or(cmp.Compare(a.OrderID, b.OrderID), cmp.Compare(a.Seq, b.Seq))
+}
+
 func sortedKeys[V any](m map[Pair]V) []Pair {
-	return slices.SortedFunc(maps.Keys(m), func(a, b Pair) int {
-		return cmp.Or(cmp.Compare(a.OrderID, b.OrderID), cmp.Compare(a.Seq, b.Seq))
-	})
+	return slices.SortedFunc(maps.Keys(m), comparePairs)
 }

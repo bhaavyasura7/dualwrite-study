@@ -62,7 +62,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           newMux(pattern, cfg.HandlerTimeout),
+		Handler:           newMux(pattern, cfg.HandlerTimeout, pub.Buffered),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	serveErr := make(chan error, 1)
@@ -94,10 +94,20 @@ func run() error {
 	return nil
 }
 
-func newMux(pattern patterns.Pattern, timeout time.Duration) *http.ServeMux {
+func newMux(pattern patterns.Pattern, timeout time.Duration, buffered func() int64) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
+	})
+	// What the service still has to deliver: records in the producer buffer and,
+	// for P2, events waiting for a retry. The drain waits for both to be zero.
+	mux.HandleFunc("GET /pending", func(w http.ResponseWriter, _ *http.Request) {
+		var retries int64
+		if p, ok := pattern.(interface{ Pending() int64 }); ok {
+			retries = p.Pending()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]int64{"buffered": buffered(), "retries": retries})
 	})
 	mux.HandleFunc("POST /orders", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

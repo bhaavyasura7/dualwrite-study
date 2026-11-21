@@ -16,20 +16,48 @@ import (
 	"dualwrite-study/internal/checker"
 )
 
+// strategies are the consumer strategies, in column order.
+var strategies = []string{"naive", "dedup", "upsert"}
+
+// businessClasses are the per-order damage classes, in column order (SPEC 11.2).
+var businessClasses = []string{
+	"missing_payments", "duplicate_payments", "unexpected_payments",
+	"incorrect_payment_amounts", "incorrect_order_mappings",
+}
+
+func businessColumns() []string {
+	var out []string
+	for _, s := range strategies {
+		for _, c := range businessClasses {
+			out = append(out, c+"_"+s)
+		}
+	}
+	return out
+}
+
 // columns is the results CSV header (SPEC 14.3).
-var columns = []string{
+var columns = slices.Concat([]string{
 	"run_id", "cycle_id", "vector_id", "pattern", "mode", "fault", "crash_point", "repeat", "seed",
 	"status", "sweep_json", "env_json", "versions_json", "load_rate", "orders_total", "events_total",
 	"lost", "ghost", "duplicates", "out_of_order", "stale_redelivery", "lost_after_send", "lost_after_ack",
 	"hooked_lost", "hooked_dup", "collateral_lost", "collateral_dup",
 	"business_damage_naive", "business_damage_dedup", "business_damage_upsert",
+}, businessColumns(), []string{
 	"wal_retained_bytes_max", "outbox_backlog_max", "relay_batches", "batch_rows_mean", "batch_rows_max",
 	"send_failed", "crash_after_n", "inflight_at_crash", "oldest_pending_ms",
-	"failover_at", "failover_lag_bytes", "failover_lag_ms", "host", "shard", "git_commit",
-	"window_p50_ms", "window_p99_ms", "window_max_ms", "recovery_s",
-	"throughput_ops", "latency_p50_ms", "latency_p99_ms", "db_cpu_pct", "load_s", "load_failed",
+	"failover_at", "failover_lag_bytes", "failover_lag_ms", "truth_source", "host", "shard", "git_commit",
+	"window_p50_ms", "window_p99_ms", "window_max_ms", "window_p99_pre_ms", "window_valid",
+	"commit_ts_missing", "window_negative", "xid_age",
+	"fault_end_at", "observed_until",
+	"service_recovery_s", "service_recovered", "synchronization_recovery_s", "synchronization_recovered",
+	"consistency_recovery_s", "consistency_recovered",
+	"throughput_ops", "latency_p50_ms", "latency_p99_ms", "load_s", "load_failed",
+	"db_cpu_pct", "db_cpu_s", "cpu_window_s", "committed_changes", "changes_per_s", "orders_per_s", "db_cpu_s_per_1000_changes",
 	"pre_host_load", "pre_db_cpu_pct", "pre_p99_ms", "pre_flag", "thermal", "run_order", "started_at", "finished_at",
-}
+	"broker_partitions", "delete_dirs", "delete_dirs_kb", "broker_wait_s", "broker_shutdown", "broker_reload_ms",
+	"drain_s", "drain_reason", "drain_marker_ids", "drain_target_lsn", "drain_slot_lsn",
+	"dump_records", "dump_control_records", "dump_bytes", "dump_s",
+})
 
 // Row is one cycle's result.
 type Row struct {
@@ -37,67 +65,177 @@ type Row struct {
 	Repeat                                                     int
 	Seed                                                       uint64
 	Status, SweepJSON, EnvJSON, VersionsJSON                   string
-	RecoveryS                                                  string
 	LoadFailed                                                 int
 	Thermal                                                    string
 	Order                                                      int // position in the run's randomised order
 	FailoverLagBytes, FailoverLagMS                            string
 	FailoverAt                                                 time.Time
+	TruthSource                                                string
+	XIDAge                                                     int64
 	LoadRate                                                   int
+	Consumers                                                  bool // the cycle ran group G consumers
 	Result                                                     checker.Result
+	Recoveries                                                 checker.Recoveries
+	Cost                                                       checker.Cost
+	FaultEndAt, ObservedUntil                                  time.Time
 	CrashAfterN                                                int
 	Host, Shard, GitCommit                                     string
 	ThroughputOps, LatencyP50MS, LatencyP99MS                  float64
-	DBCPUPct, LoadS                                            float64
+	LoadS                                                      float64
 	PreHostLoad, PreDBCPUPct, PreP99MS                         float64
 	PreFlag                                                    string
 	WALRetainedMax                                             int64
 	OutboxBacklogMax                                           int64
 	StartedAt, FinishedAt                                      time.Time
+	BrokerPartitions                                           int // partitions on the broker at cycle start
+	DeleteDirs                                                 int // partition directories marked for deletion, at cycle start
+	DeleteDirsKB                                               int64
+	BrokerWaitS                                                float64 // time spent waiting for the broker to be ready
+	BrokerShutdown                                             string  // clean or unclean, per broker restart in the cycle
+	BrokerReloadMS                                             int64   // longest partition-log reload after a restart
+	DrainS                                                     float64
+	DrainReason, DrainMarkerIDs, DrainTargetLSN, DrainSlotLSN  string
+	DumpRecords, DumpControl, DumpBytes                        int64
+	DumpS                                                      float64
+}
+
+func number(v float64) string { return strconv.FormatFloat(v, 'f', 3, 64) }
+
+func stamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// MetricColumns are the columns the checker computes from a cycle's raw files
+// alone (SPEC 11.5). cmd/recompute rewrites exactly these.
+var MetricColumns = slices.Concat([]string{
+	"orders_total", "events_total",
+	"lost", "ghost", "duplicates", "out_of_order", "stale_redelivery", "lost_after_send", "lost_after_ack",
+	"hooked_lost", "hooked_dup", "collateral_lost", "collateral_dup",
+	"business_damage_naive", "business_damage_dedup", "business_damage_upsert",
+}, businessColumns(), []string{
+	"relay_batches", "batch_rows_mean", "batch_rows_max", "send_failed", "inflight_at_crash", "oldest_pending_ms",
+	"window_p50_ms", "window_p99_ms", "window_max_ms", "window_p99_pre_ms", "window_valid",
+	"commit_ts_missing", "window_negative",
+	"service_recovery_s", "service_recovered", "synchronization_recovery_s", "synchronization_recovered",
+	"consistency_recovery_s", "consistency_recovered",
+	"db_cpu_pct", "db_cpu_s", "cpu_window_s", "committed_changes", "changes_per_s", "orders_per_s", "db_cpu_s_per_1000_changes",
+})
+
+// MetricFields formats the metric columns. The runner and cmd/recompute both
+// use it, so a recomputation can be compared with results.csv text for text.
+func MetricFields(res checker.Result, rec checker.Recoveries, cost checker.Cost, pattern string, consumers bool) map[string]string {
+	count := strconv.Itoa
+	f := map[string]string{
+		"orders_total": count(res.OrdersTotal), "events_total": count(res.EventsTotal),
+		"lost": count(res.Lost), "ghost": count(res.Ghost), "duplicates": count(res.Duplicates),
+		"out_of_order": count(res.OutOfOrder), "stale_redelivery": count(res.StaleRedelivery),
+		"lost_after_send": count(res.LostAfterSend), "lost_after_ack": "",
+		"hooked_lost": count(res.HookedLost), "hooked_dup": count(res.HookedDup),
+		"collateral_lost": count(res.CollateralLost), "collateral_dup": count(res.CollateralDup),
+		"relay_batches": count(res.RelayBatches), "batch_rows_mean": number(res.BatchRowsMean), "batch_rows_max": count(res.BatchRowsMax),
+		"send_failed": count(res.SendFailed), "inflight_at_crash": count(res.InflightAtCrash), "oldest_pending_ms": number(res.OldestPendingMS),
+		"commit_ts_missing": count(res.CommitTSMissing), "window_negative": count(res.WindowNegative),
+		"window_valid": strconv.FormatBool(!res.WindowInvalid),
+	}
+	// P4 and P5 publish through Connect, which logs no delivery markers.
+	if !isCDC(pattern) {
+		f["lost_after_ack"] = count(res.LostAfterAck)
+	}
+	for _, column := range []string{"window_p50_ms", "window_p99_ms", "window_max_ms", "window_p99_pre_ms"} {
+		f[column] = ""
+	}
+	if !res.WindowInvalid {
+		f["window_p50_ms"], f["window_p99_ms"], f["window_max_ms"] = number(res.WindowP50MS), number(res.WindowP99MS), number(res.WindowMaxMS)
+	}
+	if rec.WindowP99PreKnown {
+		f["window_p99_pre_ms"] = number(rec.WindowP99PreMS)
+	}
+	for _, s := range strategies {
+		b, ok := res.Business[s]
+		values := []int{b.Missing, b.Duplicate, b.Unexpected, b.WrongAmount, b.WrongMapping}
+		f["business_damage_"+s] = ""
+		for i, class := range businessClasses {
+			f[class+"_"+s] = ""
+			if ok && consumers {
+				f[class+"_"+s] = count(values[i])
+			}
+		}
+		if ok && consumers {
+			f["business_damage_"+s] = count(b.Total())
+		}
+	}
+	for name, r := range map[string]checker.Recovery{
+		"service": rec.Service, "synchronization": rec.Synchronization, "consistency": rec.Consistency,
+	} {
+		f[name+"_recovery_s"], f[name+"_recovered"] = "", ""
+		if r.Known {
+			f[name+"_recovery_s"], f[name+"_recovered"] = number(r.Seconds), strconv.FormatBool(r.Recovered)
+		}
+	}
+	for _, column := range []string{"db_cpu_pct", "db_cpu_s", "cpu_window_s", "committed_changes", "changes_per_s", "orders_per_s", "db_cpu_s_per_1000_changes"} {
+		f[column] = ""
+	}
+	if cost.Known {
+		f["db_cpu_pct"], f["db_cpu_s"], f["cpu_window_s"] = number(cost.DBCPUPct), number(cost.DBCPUS), number(cost.WindowS)
+		f["committed_changes"], f["changes_per_s"], f["orders_per_s"] = count(cost.CommittedChanges), number(cost.ChangesPerS), number(cost.OrdersPerS)
+		if cost.CommittedChanges > 0 {
+			f["db_cpu_s_per_1000_changes"] = number(cost.PerThousand)
+		}
+	}
+	return f
 }
 
 func (r Row) record() []string {
-	number := func(v float64) string { return strconv.FormatFloat(v, 'f', 3, 64) }
 	count := strconv.Itoa
-	damage := func(strategy string) string {
-		if v, ok := r.Result.BusinessDamage[strategy]; ok {
-			return count(v)
-		}
-		return ""
-	}
 	wal := ""
 	if r.WALRetainedMax > 0 {
 		wal = strconv.FormatInt(r.WALRetainedMax, 10)
-	}
-	failoverAt := ""
-	if !r.FailoverAt.IsZero() {
-		failoverAt = r.FailoverAt.UTC().Format(time.RFC3339Nano)
-	}
-	// P4 and P5 publish through Connect, which logs no delivery markers.
-	lostAfterAck := ""
-	if !isCDC(r.Pattern) {
-		lostAfterAck = count(r.Result.LostAfterAck)
 	}
 	backlog := ""
 	if r.Pattern == "P3" {
 		backlog = strconv.FormatInt(r.OutboxBacklogMax, 10)
 	}
-	res := r.Result
-	return []string{
-		r.RunID, r.CycleID, r.VectorID, r.Pattern, r.Mode, r.Fault, r.CrashPoint, count(r.Repeat),
-		strconv.FormatUint(r.Seed, 10),
-		r.Status, r.SweepJSON, r.EnvJSON, r.VersionsJSON, count(r.LoadRate), count(res.OrdersTotal), count(res.EventsTotal),
-		count(res.Lost), count(res.Ghost), count(res.Duplicates), count(res.OutOfOrder), count(res.StaleRedelivery), count(res.LostAfterSend), lostAfterAck,
-		count(res.HookedLost), count(res.HookedDup), count(res.CollateralLost), count(res.CollateralDup),
-		damage("naive"), damage("dedup"), damage("upsert"),
-		wal, backlog, count(res.RelayBatches), number(res.BatchRowsMean), count(res.BatchRowsMax),
-		count(res.SendFailed), count(r.CrashAfterN), count(res.InflightAtCrash), number(res.OldestPendingMS),
-		failoverAt, r.FailoverLagBytes, r.FailoverLagMS, r.Host, r.Shard, r.GitCommit,
-		number(res.WindowP50MS), number(res.WindowP99MS), number(res.WindowMaxMS), r.RecoveryS,
-		number(r.ThroughputOps), number(r.LatencyP50MS), number(r.LatencyP99MS), number(r.DBCPUPct), number(r.LoadS), count(r.LoadFailed),
-		number(r.PreHostLoad), number(r.PreDBCPUPct), number(r.PreP99MS), r.PreFlag, r.Thermal, count(r.Order),
-		r.StartedAt.UTC().Format(time.RFC3339), r.FinishedAt.UTC().Format(time.RFC3339),
+	xidAge := ""
+	if r.XIDAge > 0 {
+		xidAge = strconv.FormatInt(r.XIDAge, 10)
 	}
+	f := MetricFields(r.Result, r.Recoveries, r.Cost, r.Pattern, r.Consumers)
+	for k, v := range map[string]string{
+		"run_id": r.RunID, "cycle_id": r.CycleID, "vector_id": r.VectorID, "pattern": r.Pattern, "mode": r.Mode,
+		"fault": r.Fault, "crash_point": r.CrashPoint, "repeat": count(r.Repeat), "seed": strconv.FormatUint(r.Seed, 10),
+		"status": r.Status, "sweep_json": r.SweepJSON, "env_json": r.EnvJSON, "versions_json": r.VersionsJSON,
+		"load_rate":              count(r.LoadRate),
+		"wal_retained_bytes_max": wal, "outbox_backlog_max": backlog, "crash_after_n": count(r.CrashAfterN),
+		"failover_at": stamp(r.FailoverAt), "failover_lag_bytes": r.FailoverLagBytes, "failover_lag_ms": r.FailoverLagMS,
+		"truth_source": r.TruthSource, "host": r.Host, "shard": r.Shard, "git_commit": r.GitCommit,
+		"xid_age": xidAge, "fault_end_at": stamp(r.FaultEndAt), "observed_until": stamp(r.ObservedUntil),
+		"throughput_ops": number(r.ThroughputOps), "latency_p50_ms": number(r.LatencyP50MS), "latency_p99_ms": number(r.LatencyP99MS),
+		"load_s": number(r.LoadS), "load_failed": count(r.LoadFailed),
+		"pre_host_load": number(r.PreHostLoad), "pre_db_cpu_pct": number(r.PreDBCPUPct), "pre_p99_ms": number(r.PreP99MS),
+		"pre_flag": r.PreFlag, "thermal": r.Thermal, "run_order": count(r.Order),
+		"started_at": r.StartedAt.UTC().Format(time.RFC3339), "finished_at": r.FinishedAt.UTC().Format(time.RFC3339),
+		"broker_partitions": count(r.BrokerPartitions), "delete_dirs": count(r.DeleteDirs),
+		"delete_dirs_kb": strconv.FormatInt(r.DeleteDirsKB, 10), "broker_wait_s": number(r.BrokerWaitS),
+		"broker_shutdown": r.BrokerShutdown, "broker_reload_ms": strconv.FormatInt(r.BrokerReloadMS, 10),
+		"drain_s": number(r.DrainS), "drain_reason": r.DrainReason, "drain_marker_ids": r.DrainMarkerIDs,
+		"drain_target_lsn": r.DrainTargetLSN, "drain_slot_lsn": r.DrainSlotLSN,
+		"dump_records": strconv.FormatInt(r.DumpRecords, 10), "dump_control_records": strconv.FormatInt(r.DumpControl, 10),
+		"dump_bytes": strconv.FormatInt(r.DumpBytes, 10), "dump_s": number(r.DumpS),
+	} {
+		f[k] = v
+	}
+	out := make([]string, len(columns))
+	for i, column := range columns {
+		value, ok := f[column]
+		if !ok {
+			panic("results: no value for column " + column)
+		}
+		out[i] = value
+	}
+	return out
 }
 
 // Results appends rows to a CSV file and remembers which cycles it holds.
@@ -254,8 +392,8 @@ func assertionFailure(cycle Cycle, res checker.Result) string {
 	if cycle.AssertScope == "hooked" {
 		values = map[string]int{"lost": res.HookedLost, "ghost": res.HookedGhost, "duplicates": res.HookedDup}
 	}
-	for _, damage := range res.BusinessDamage {
-		values["business_damage"] = max(values["business_damage"], damage)
+	for _, damage := range res.Business {
+		values["business_damage"] = max(values["business_damage"], damage.Total())
 	}
 	for _, metric := range sortedKeys(cycle.Assert) {
 		if got, ok := values[metric]; ok && got != cycle.Assert[metric] {

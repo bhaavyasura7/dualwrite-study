@@ -1,0 +1,236 @@
+{
+  "comment": "Every business-damage class in one strategy (SPEC 11.2, 11.4). b is paid twice: 1 duplicate. c has a wrong amount: counted in incorrect_payment_amounts and, as no correct payment exists, in missing. d was cancelled and e is not in the truth: 2 unexpected. f's key resolves to order b: wrong mapping, and f is missing. a is never paid: missing. g uses a P5-style key that resolves without an event ID: correct. Total 8; the 2.8 formula gave |7 rows - 5 paid| = 2.",
+  "input": {
+    "db": [
+      {
+        "order": "a",
+        "seq": 1
+      },
+      {
+        "order": "a",
+        "seq": 2,
+        "status": "PAID"
+      },
+      {
+        "order": "b",
+        "seq": 1
+      },
+      {
+        "order": "b",
+        "seq": 2,
+        "status": "PAID"
+      },
+      {
+        "order": "c",
+        "seq": 1
+      },
+      {
+        "order": "c",
+        "seq": 2,
+        "status": "PAID"
+      },
+      {
+        "order": "d",
+        "seq": 1
+      },
+      {
+        "order": "d",
+        "seq": 2,
+        "status": "CANCELLED"
+      },
+      {
+        "order": "f",
+        "seq": 1
+      },
+      {
+        "order": "f",
+        "seq": 2,
+        "status": "PAID"
+      },
+      {
+        "order": "g",
+        "seq": 1
+      },
+      {
+        "order": "g",
+        "seq": 2,
+        "status": "PAID"
+      }
+    ],
+    "kafka": [
+      {
+        "order": "a",
+        "seq": 1,
+        "event_id": "a1",
+        "partition": 0,
+        "offset": 0
+      },
+      {
+        "order": "a",
+        "seq": 2,
+        "event_id": "ea",
+        "partition": 0,
+        "offset": 1
+      },
+      {
+        "order": "b",
+        "seq": 1,
+        "event_id": "b1",
+        "partition": 0,
+        "offset": 2
+      },
+      {
+        "order": "b",
+        "seq": 2,
+        "event_id": "eb",
+        "partition": 0,
+        "offset": 3
+      },
+      {
+        "order": "c",
+        "seq": 1,
+        "event_id": "c1",
+        "partition": 0,
+        "offset": 4
+      },
+      {
+        "order": "c",
+        "seq": 2,
+        "event_id": "ec",
+        "partition": 0,
+        "offset": 5
+      },
+      {
+        "order": "d",
+        "seq": 1,
+        "event_id": "d1",
+        "partition": 0,
+        "offset": 6
+      },
+      {
+        "order": "d",
+        "seq": 2,
+        "event_id": "ed",
+        "partition": 0,
+        "offset": 7
+      },
+      {
+        "order": "f",
+        "seq": 1,
+        "event_id": "f1",
+        "partition": 0,
+        "offset": 8
+      },
+      {
+        "order": "f",
+        "seq": 2,
+        "event_id": "ef",
+        "partition": 0,
+        "offset": 9
+      },
+      {
+        "order": "g",
+        "seq": 1,
+        "partition": 0,
+        "offset": 10
+      },
+      {
+        "order": "g",
+        "seq": 2,
+        "partition": 0,
+        "offset": 11
+      }
+    ],
+    "orders": [
+      {
+        "order": "a",
+        "status": "PAID",
+        "amount_cents": 49900
+      },
+      {
+        "order": "b",
+        "status": "PAID",
+        "amount_cents": 49900
+      },
+      {
+        "order": "c",
+        "status": "PAID",
+        "amount_cents": 49900
+      },
+      {
+        "order": "d",
+        "status": "CANCELLED",
+        "amount_cents": 49900
+      },
+      {
+        "order": "f",
+        "status": "PAID",
+        "amount_cents": 49900
+      },
+      {
+        "order": "g",
+        "status": "PAID",
+        "amount_cents": 49900
+      }
+    ],
+    "payments": {
+      "naive": [
+        {
+          "payment_id": 1,
+          "order": "b",
+          "event_key": "eb",
+          "amount_cents": 49900
+        },
+        {
+          "payment_id": 2,
+          "order": "b",
+          "event_key": "eb",
+          "amount_cents": 49900
+        },
+        {
+          "payment_id": 3,
+          "order": "c",
+          "event_key": "ec",
+          "amount_cents": 100
+        },
+        {
+          "payment_id": 4,
+          "order": "d",
+          "event_key": "ed",
+          "amount_cents": 49900
+        },
+        {
+          "payment_id": 5,
+          "order": "e",
+          "event_key": "ee",
+          "amount_cents": 49900
+        },
+        {
+          "payment_id": 6,
+          "order": "f",
+          "event_key": "eb",
+          "amount_cents": 49900
+        },
+        {
+          "payment_id": 7,
+          "order": "g",
+          "event_key": "g:2",
+          "amount_cents": 49900
+        }
+      ]
+    }
+  },
+  "want": {
+    "orders_total": 6,
+    "events_total": 12,
+    "business": {
+      "naive": {
+        "missing_payments": 3,
+        "duplicate_payments": 1,
+        "unexpected_payments": 2,
+        "incorrect_payment_amounts": 1,
+        "incorrect_order_mappings": 1
+      }
+    }
+  }
+}

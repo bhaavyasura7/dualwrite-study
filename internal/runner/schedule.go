@@ -18,6 +18,7 @@ import (
 
 	"dualwrite-study/internal/faults"
 	"dualwrite-study/internal/obs"
+	"dualwrite-study/internal/raw"
 )
 
 const (
@@ -123,13 +124,19 @@ func (r *Runner) playFault(ctx context.Context, run *cycleRun, spec Fault, fault
 		return err
 	}
 	slog.Info("fault injected", "cycle", run.cycle.ID, "fault", fault.Name(), "target", spec.Target)
+	event := raw.FaultEvent{Type: spec.Type, Target: spec.Target, Injected: time.Now()}
 	injectErr := fault.Inject(ctx)
 	if injectErr == nil {
 		_ = sleep(ctx, duration)
 	}
 	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), recoverTimeout)
 	defer cancel()
-	return errors.Join(injectErr, fault.Recover(restore))
+	recoverErr := fault.Recover(restore)
+	event.Recovered = time.Now()
+	run.faultMu.Lock()
+	run.timeline.Faults = append(run.timeline.Faults, event)
+	run.faultMu.Unlock()
+	return errors.Join(injectErr, recoverErr)
 }
 
 // awaitPoint arms the point now that warm-up is over and waits for it to fire in
@@ -148,12 +155,14 @@ func (r *Runner) awaitPoint(ctx context.Context, run *cycleRun, latest time.Dura
 			if err := r.docker.WaitForLog(wait, target, obs.StallPointEnd); err != nil {
 				return &failure{"INVALID_NO_STALL", err}
 			}
+			r.notePointHit(run)
 			continue
 		}
 		if err := r.docker.WaitForLog(wait, target, obs.CrashPointHit); err != nil {
 			_ = r.captureLogs(context.WithoutCancel(ctx), run, target)
 			return &failure{"INVALID_NO_CRASH", err}
 		}
+		r.notePointHit(run)
 		code, err := r.docker.WaitForExit(wait, target)
 		if err != nil {
 			return failed("RECOVER", err)
@@ -164,6 +173,17 @@ func (r *Runner) awaitPoint(ctx context.Context, run *cycleRun, latest time.Dura
 		markCrashed(target)
 	}
 	return nil
+}
+
+// notePointHit records when the crash or stall point was first seen to fire.
+// WaitForLog polls every 100 ms, so this is at most that late; the marker's own
+// time in markers.log.gz is the exact one.
+func (r *Runner) notePointHit(run *cycleRun) {
+	run.faultMu.Lock()
+	defer run.faultMu.Unlock()
+	if run.timeline.PointHit.IsZero() {
+		run.timeline.PointHit = time.Now()
+	}
 }
 
 // buildFault maps a catalogue fault onto its containers or proxies.
@@ -416,6 +436,7 @@ func (r *Runner) waitForConnect(ctx context.Context) error {
 func (r *Runner) failover(ctx context.Context, run *cycleRun) error {
 	r.recordLag(ctx, run)
 	run.row.FailoverAt = time.Now()
+	run.timeline.FailoverAt = run.row.FailoverAt
 	if err := r.docker.Kill(ctx, primary); err != nil {
 		return err
 	}
@@ -428,6 +449,7 @@ func (r *Runner) failover(ctx context.Context, run *cycleRun) error {
 		return fmt.Errorf("promote replica: %w", err)
 	}
 	run.truthDSN = replicaDSN
+	run.row.TruthSource = "promoted_replica"
 	if err := r.docker.ConnectAlias(ctx, failoverNetwork, replica, "postgres-primary"); err != nil {
 		return err
 	}
@@ -542,15 +564,11 @@ func (r *Runner) strictChecks(ctx context.Context) error {
 	if memory < minDockerMemory {
 		return fmt.Errorf("docker has %d GB, need about 12", memory>>30)
 	}
-	power, err := exec.CommandContext(ctx, "pmset", "-g", "batt").Output()
-	if err != nil {
-		return fmt.Errorf("read power source: %w", err)
-	}
-	if !strings.Contains(string(power), "AC Power") {
-		return errors.New("the Mac is on battery; plug it in")
+	if err := onMainsPower(ctx); err != nil {
+		return err
 	}
 	if load := hostLoad(); load > r.measurement.PrecheckMaxHostLoad {
-		return fmt.Errorf("host load is %.1f; the Mac must be idle", load)
+		return fmt.Errorf("host load is %.1f; the machine must be idle", load)
 	}
 	return nil
 }

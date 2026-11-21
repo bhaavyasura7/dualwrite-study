@@ -150,5 +150,8 @@ func (p *Publisher) Flush(ctx context.Context) error {
 	return nil
 }
 
+// Buffered is the number of records produced but not yet delivered or failed.
+func (p *Publisher) Buffered() int64 { return p.client.BufferedProduceRecords() }
+
 // Close releases the client.
 func (p *Publisher) Close() { p.client.Close() }

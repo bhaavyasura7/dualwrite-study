@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"dualwrite-study/internal/crash"
@@ -67,6 +68,16 @@ type retrying struct {
 	max         int
 	base, limit time.Duration
 	pending     sync.WaitGroup
+	outstanding atomic.Int64 // events not yet delivered or given up, for GET /pending
+}
+
+// Pending is the number of events still being delivered or retried. The
+// runner's drain waits for it to reach zero (SPEC 9.4).
+func (p *retrying) Pending() int64 { return p.outstanding.Load() }
+
+func (p *retrying) done() {
+	p.outstanding.Add(-1)
+	p.pending.Done()
 }
 
 func (p *retrying) Apply(ctx context.Context, change OrderChange) error {
@@ -75,6 +86,7 @@ func (p *retrying) Apply(ctx context.Context, change OrderChange) error {
 		return err
 	}
 	p.pending.Add(1)
+	p.outstanding.Add(1)
 	p.deliver(context.WithoutCancel(ctx), ev, 0)
 	crash.Point("after_send_before_flush", hook(ev)...)
 	return nil
@@ -83,21 +95,21 @@ func (p *retrying) Apply(ctx context.Context, change OrderChange) error {
 func (p *retrying) deliver(ctx context.Context, ev events.Event, attempt int) {
 	err := p.publisher.SendAsync(ctx, ev, func(err error) {
 		if err == nil {
-			p.pending.Done()
+			p.done()
 			return
 		}
 		p.scheduleRetry(ctx, ev, attempt)
 	})
 	if err != nil {
 		slog.Error(obs.SendFailed, "event_id", ev.EventID, "error", err)
-		p.pending.Done()
+		p.done()
 	}
 }
 
 func (p *retrying) scheduleRetry(ctx context.Context, ev events.Event, attempt int) {
 	if attempt >= p.max {
 		slog.Error(obs.RetryExhausted, "event_id", ev.EventID, "order_id", ev.OrderID, "seq", ev.Seq)
-		p.pending.Done()
+		p.done()
 		return
 	}
 	backoff := min(p.base<<attempt, p.limit)

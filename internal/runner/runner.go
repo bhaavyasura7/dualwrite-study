@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -13,11 +14,11 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,7 +30,9 @@ import (
 
 	"dualwrite-study/internal/checker"
 	"dualwrite-study/internal/config"
+	"dualwrite-study/internal/dump"
 	"dualwrite-study/internal/load"
+	"dualwrite-study/internal/raw"
 )
 
 const (
@@ -254,6 +257,20 @@ type cycleRun struct {
 	components []Spec
 	truthDSN   string    // the database that holds the truth; the replica after failover
 	faultEnd   time.Time // when the last fault ended
+	seed       uint64
+	timeline   raw.Timeline
+	faultMu    sync.Mutex // guards timeline.Faults, written by concurrent faults
+	session    *load.Session
+	damage     checker.Damage
+	// Progress flags, so the end of the cycle knows what still needs doing.
+	topicCreated bool // RESET created this cycle's topic
+	dumped       bool // the topic's dump is written and verified
+	rawWritten   bool // CHECK wrote the raw files
+}
+
+// state records a state's start and end in the timeline.
+func (run *cycleRun) state(name string, start time.Time) {
+	run.timeline.States[name] = [2]time.Time{start, time.Now()}
 }
 
 // failure carries the status a cycle ended with.
@@ -277,11 +294,15 @@ func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 		RunID: r.opts.RunID, CycleID: cycle.ID, VectorID: cycle.VectorID, Pattern: cycle.Pattern, Mode: cycle.Mode,
 		Repeat: cycle.Repeat, Seed: seed, SweepJSON: string(sweep), EnvJSON: string(env), VersionsJSON: r.opts.Versions,
 		LoadRate: cycle.Load.RatePerS, Host: r.opts.Host, Shard: r.opts.Shard.String(), GitCommit: r.opts.GitCommit,
+		TruthSource: "primary", Consumers: len(cycle.Topology.Consumers) > 0,
 		StartedAt: time.Now(),
 	}
-	run := &cycleRun{cycle: cycle, row: &row, truthDSN: r.measurement.PostgresDSN}
-	var damage checker.Damage
-	err := r.execute(ctx, run, seed, &damage)
+	run := &cycleRun{cycle: cycle, row: &row, truthDSN: r.measurement.PostgresDSN, seed: seed}
+	run.timeline = raw.Timeline{
+		CycleID: cycle.ID, Pattern: cycle.Pattern, Seed: seed, Env: cycle.Env,
+		Consumers: cycle.Topology.Consumers, States: make(map[string][2]time.Time),
+	}
+	err := r.execute(ctx, run, seed)
 	row.FinishedAt = time.Now()
 	row.Status = "OK"
 	var ended *failure
@@ -292,13 +313,43 @@ func (r *Runner) runCycle(ctx context.Context, cycle Cycle) Row {
 		row.Status = "FAILED_RUNNER"
 		slog.Error("cycle failed", "cycle", cycle.ID, "error", err)
 	}
-	if err := r.keepEvidence(run, damage); err != nil {
+	if ctx.Err() == nil {
+		r.finishCycle(ctx, run)
+	}
+	if err := r.keepEvidence(run); err != nil {
 		slog.Error("keeping evidence failed", "cycle", cycle.ID, "error", err)
 	}
 	return row
 }
 
-func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage *checker.Damage) error {
+// finishCycle keeps a failed cycle's evidence and leaves the broker clean: a
+// topic created but not yet dumped is dumped now, a verified topic is deleted,
+// raw files not yet written are written as far as they can be, and the
+// timeline is always written last (SPEC 11.5, 14.2).
+func (r *Runner) finishCycle(ctx context.Context, run *cycleRun) {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), readyCap+dump.Timeout+deleteWait)
+	defer cancel()
+	if run.topicCreated && !run.dumped {
+		if err := r.dumpCycle(cleanup, run); err != nil {
+			slog.Error("dump of failed cycle failed; topic kept", "cycle", run.cycle.ID, "error", err)
+		}
+	}
+	if run.topicCreated {
+		if err := r.deleteCycleTopics(cleanup, run); err != nil {
+			slog.Warn("delete cycle topics", "cycle", run.cycle.ID, "error", err)
+		}
+	}
+	if !run.rawWritten && run.topicCreated {
+		if err := r.writeRaw(cleanup, run); err != nil {
+			slog.Warn("raw files of failed cycle incomplete", "cycle", run.cycle.ID, "error", err)
+		}
+	}
+	if err := raw.WriteJSON(raw.Dir(r.opts.ResultsDir, run.cycle.ID), raw.TimelineFile, run.timeline); err != nil {
+		slog.Error("write timeline", "cycle", run.cycle.ID, "error", err)
+	}
+}
+
+func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64) error {
 	cycle := run.cycle
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
@@ -307,20 +358,66 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 		_ = r.removeConnectors(cleanup)
 	}()
 
-	// RESET
-	if err := r.reset(ctx, cycle); err != nil {
+	// RESET. The broker must be serving first: a broker restarted by the last
+	// cycle may still be reloading its logs.
+	began := time.Now()
+	waited, err := r.waitReady(ctx, cycle.Topology.Brokers, "", "RESET")
+	run.row.BrokerWaitS += waited.Seconds()
+	if err != nil {
 		return failed("RESET", err)
 	}
+	partitions, err := r.partitionCount(ctx)
+	if err != nil {
+		return failed("RESET", fmt.Errorf("count partitions: %w", err))
+	}
+	run.row.BrokerPartitions = partitions
+	dirs, dirKB, err := deleteDirs(ctx, cycle.Topology.Brokers)
+	if err != nil {
+		return failed("RESET", fmt.Errorf("count delete directories: %w", err))
+	}
+	run.row.DeleteDirs, run.row.DeleteDirsKB = dirs, dirKB
+	slog.Info("cycle start", "cycle", cycle.ID, "broker_partitions", partitions, "delete_dirs", dirs,
+		"delete_dirs_kb", dirKB, "ready_wait_s", waited.Seconds())
+	if err := r.reset(ctx, run); err != nil {
+		return failed("RESET", err)
+	}
+	run.state("RESET", began)
 
 	// START
+	began = time.Now()
 	if err := r.prepare(run, seed); err != nil {
+		return failed("START", err)
+	}
+	if err := r.checkCommitTimes(ctx, run); err != nil {
 		return failed("START", err)
 	}
 	if err := r.startAll(ctx, run); err != nil {
 		return failed("START", err)
 	}
 	stopSampling := r.sampleState(ctx, cycle)
-	defer func() { run.row.WALRetainedMax, run.row.OutboxBacklogMax, damage.SlotTimeline = stopSampling() }()
+	sampled := false
+	finishSampling := func() {
+		if sampled {
+			return
+		}
+		sampled = true
+		wal, backlog, slots := stopSampling()
+		run.timeline.WALRetained, run.timeline.OutboxBacklog, run.timeline.Slots = wal, backlog, slots
+		for _, sample := range wal {
+			run.row.WALRetainedMax = max(run.row.WALRetainedMax, sample.Value)
+		}
+		for _, sample := range backlog {
+			run.row.OutboxBacklogMax = max(run.row.OutboxBacklogMax, sample.Value)
+		}
+		for _, slot := range slots {
+			run.damage.SlotTimeline = append(run.damage.SlotTimeline, checker.SlotSample{
+				Time: slot.At, Slot: slot.Name, Active: slot.Active,
+				ConfirmedFlush: slot.ConfirmedFlush, Restart: slot.Restart, CurrentWAL: slot.CurrentWAL,
+			})
+		}
+	}
+	defer finishSampling()
+	run.state("START", began)
 
 	// WARMUP
 	loadCtx, stopLoad := context.WithCancel(ctx)
@@ -333,14 +430,21 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	loadConfig.BurstAt = time.Duration(cycle.Load.WarmupS+cycle.Load.BurstAtS) * time.Second
 	loadConfig.BurstLength = time.Duration(cycle.Load.BurstS) * time.Second
 	loadConfig.Warmup = time.Duration(cycle.Load.WarmupS) * time.Second
-	cpuBefore, cpuErr := r.docker.CPU(ctx, primary)
+	began = time.Now()
 	session := load.Start(loadCtx, loadConfig)
+	run.session = session
+	run.timeline.LoadStart, _ = session.Requests()
 	if err := sleep(ctx, max(loadConfig.Warmup-precheckWindow, 0)); err != nil {
 		return failed("WARMUP", err)
 	}
 	if err := r.precheck(ctx, run, session); err != nil {
 		return failed("WARMUP", err)
 	}
+	// The cost interval starts here, at the end of warm-up (SPEC 11.2).
+	run.timeline.WarmupEnd = time.Now()
+	cpuStart, cpuStartErr := r.docker.CPU(ctx, primary)
+	run.timeline.CPUStart = raw.CPUSample{At: time.Now(), TotalNS: cpuStart.container}
+	run.state("WARMUP", began)
 	if run.row.PreP99MS == 0 {
 		// No request succeeded before the fault: a fault on an idle system proves
 		// nothing, and "lost 0" here would be false comfort.
@@ -351,35 +455,59 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 	}
 
 	// FAULT and RECOVER
+	began = time.Now()
 	if len(cycle.Faults) > 0 || cycle.Crash != nil || cycle.Stall != nil {
 		if err := r.runFaults(ctx, run, seed); err != nil {
 			stopLoad()
 			_, _ = session.Wait()
 			return err
 		}
+		run.timeline.FaultEnd, run.row.FaultEndAt = run.faultEnd, run.faultEnd
+		run.state("FAULT", began)
+		began = time.Now()
 		if err := sleep(ctx, time.Duration(cycle.Load.PostFaultS)*time.Second); err != nil {
 			return failed("RECOVER", err)
 		}
-	} else if err := sleep(ctx, time.Duration(cycle.Load.DurationS)*time.Second); err != nil {
-		return failed("FAULT", err)
+		run.state("RECOVER", began)
+	} else {
+		if err := sleep(ctx, time.Duration(cycle.Load.DurationS)*time.Second); err != nil {
+			return failed("FAULT", err)
+		}
+		run.state("FAULT", began)
 	}
 
 	// DRAIN
+	began = time.Now()
 	stopLoad()
 	report, err := session.Wait()
+	run.timeline.LoadStop = time.Now()
+	cpuEnd, cpuEndErr := r.docker.CPU(ctx, primary)
+	run.timeline.CPUEnd = raw.CPUSample{At: time.Now(), TotalNS: cpuEnd.container}
+	// Both samples must come from one primary; a failover kills it.
+	run.timeline.CPUValid = cpuStartErr == nil && cpuEndErr == nil && run.row.FailoverAt.IsZero()
 	if err != nil {
 		return failed("DRAIN", err)
 	}
 	run.row.ThroughputOps, run.row.LoadS, run.row.LoadFailed = report.ThroughputOps, report.DurationS, report.Failed
 	run.row.LatencyP50MS, run.row.LatencyP99MS = report.LatencyP50MS, report.LatencyP99MS
-	if cpuErr == nil {
-		if cpuAfter, err := r.docker.CPU(ctx, primary); err == nil {
-			run.row.DBCPUPct = cpuPercent(cpuBefore, cpuAfter)
-		}
-	}
-	if err := r.drain(ctx, run); err != nil {
+	// A broker restarted by the fault may still be loading its logs; the drain's
+	// own clock starts once it serves the cycle topic.
+	waited, err = r.waitReady(ctx, cycle.Topology.Brokers, "orders."+cycle.ID, "DRAIN")
+	run.row.BrokerWaitS += waited.Seconds()
+	if err != nil {
 		return failed("DRAIN", err)
 	}
+	drainStart := time.Now()
+	state, drainErr := r.drain(ctx, run, seed)
+	run.row.DrainS = time.Since(drainStart).Seconds()
+	run.timeline.MarkerIDs, run.timeline.MarkerOffsets = state.markerIDs, state.offsets
+	run.timeline.DrainTargetLSN, run.timeline.DrainSlotLSN = state.targetLSN, state.slotLSN
+	run.timeline.DrainReason, run.timeline.ConnectStatus = state.reason, state.status
+	run.row.DrainMarkerIDs = strings.Join(state.markerIDs, ";")
+	run.row.DrainTargetLSN, run.row.DrainSlotLSN, run.row.DrainReason = state.targetLSN, state.slotLSN, state.reason
+	observed := time.Now()
+	run.timeline.ObservedUntil, run.row.ObservedUntil = observed, observed
+	finishSampling()
 	if isCDC(cycle.Pattern) {
 		// Connect's own log explains CDC damage; keep the part from this cycle.
 		if logs, err := r.docker.LogsSince(ctx, connectContainer, run.row.StartedAt); err == nil {
@@ -397,28 +525,203 @@ func (r *Runner) execute(ctx context.Context, run *cycleRun, seed uint64, damage
 			return failed("DRAIN", err)
 		}
 	}
+	run.state("DRAIN", began)
+	if drainErr != nil {
+		return failed("DRAIN", drainErr)
+	}
+
+	// DUMP: the raw log first, so CHECK reads the same evidence a recomputation will.
+	began = time.Now()
+	if err := r.dumpCycle(ctx, run); err != nil {
+		return failed("DUMP", err)
+	}
+	run.state("DUMP", began)
 
 	// CHECK
+	began = time.Now()
 	checkCtx, cancelCheck := context.WithTimeout(ctx, checkTimeout)
 	defer cancelCheck()
-	in, err := checker.Collect(checkCtx, run.truthDSN, r.seeds(cycle.Topology.Brokers),
-		"orders."+cycle.ID, bytes.NewReader(run.logs.Bytes()), cycle.Topology.Consumers)
-	if err != nil {
+	if err := r.writeRaw(checkCtx, run); err != nil {
 		return failed("CHECK", err)
 	}
-	run.row.Result, *damage = checker.Check(in)
-	if !run.row.FailoverAt.IsZero() {
-		damage.LateAfterFailover = checker.LateDeliveries(in, run.row.FailoverAt)
+	if err := r.crossCheck(checkCtx, run); err != nil {
+		return failed("CHECK", err)
 	}
-	if !run.faultEnd.IsZero() {
-		if seconds, ok := checker.RecoveryS(in, run.faultEnd); ok {
-			run.row.RecoveryS = strconv.FormatFloat(seconds, 'f', 3, 64)
-		}
+	if err := r.check(run); err != nil {
+		return failed("CHECK", err)
 	}
+	run.state("CHECK", began)
 	if violation := assertionFailure(cycle, run.row.Result); violation != "" {
 		return &failure{"CONTROL_FAIL", errors.New(violation)}
 	}
 	return nil
+}
+
+// checkCommitTimes refuses a cycle whose commit times could be wrong (SPEC 5.1):
+// track_commit_timestamp must be on on both servers, and the database's
+// transaction ID age well below the freeze limit.
+func (r *Runner) checkCommitTimes(ctx context.Context, run *cycleRun) error {
+	for _, dsn := range []string{r.measurement.PostgresDSN, replicaDSN} {
+		conn, err := pgx.Connect(ctx, dsn)
+		if err != nil {
+			return fmt.Errorf("connect to postgres: %w", err)
+		}
+		var setting string
+		err = conn.QueryRow(ctx, `SHOW track_commit_timestamp`).Scan(&setting)
+		if err == nil && dsn == r.measurement.PostgresDSN {
+			err = conn.QueryRow(ctx, `SELECT age(datfrozenxid) FROM pg_database WHERE datname = current_database()`).Scan(&run.row.XIDAge)
+		}
+		_ = conn.Close(context.WithoutCancel(ctx))
+		if err != nil {
+			return fmt.Errorf("read commit-time settings: %w", err)
+		}
+		if setting != "on" {
+			return fmt.Errorf("track_commit_timestamp is %q on %s, want on", setting, dsn)
+		}
+	}
+	if run.row.XIDAge > maxXIDAge {
+		return fmt.Errorf("transaction ID age %d is above %d; commit times may be truncated", run.row.XIDAge, maxXIDAge)
+	}
+	return nil
+}
+
+// maxXIDAge is SPEC 5.1's limit, well below autovacuum_freeze_max_age.
+const maxXIDAge = 150_000_000
+
+// writeRaw saves everything the checker reads (SPEC 11.5), from the truth
+// database, the load generator, the logs and the timeline.
+func (r *Runner) writeRaw(ctx context.Context, run *cycleRun) error {
+	dir := raw.Dir(r.opts.ResultsDir, run.cycle.ID)
+	conn, err := pgx.Connect(ctx, run.truthDSN)
+	if err != nil {
+		return fmt.Errorf("connect to postgres: %w", err)
+	}
+	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+	truth, err := checker.CollectTruth(ctx, conn, run.row.TruthSource)
+	if err != nil {
+		return err
+	}
+	if err := raw.WriteJSON(dir, raw.TruthFile, truth); err != nil {
+		return err
+	}
+	if run.cycle.Pattern == "P3" || run.cycle.Pattern == "P4" {
+		outbox, err := checker.CollectOutbox(ctx, conn)
+		if err != nil {
+			return err
+		}
+		if err := raw.WriteJSON(dir, raw.OutboxFile, outbox); err != nil {
+			return err
+		}
+	}
+	if len(run.cycle.Topology.Consumers) > 0 {
+		consumer, err := checker.CollectConsumer(ctx, conn, run.cycle.Topology.Consumers)
+		if err != nil {
+			return err
+		}
+		if err := raw.WriteJSON(dir, raw.ConsumerFile, consumer); err != nil {
+			return err
+		}
+	}
+	loadData := raw.Load{}
+	if run.session != nil {
+		loadData.Start, loadData.Requests = run.session.Requests()
+	}
+	if err := raw.WriteJSON(dir, raw.LoadFile, loadData); err != nil {
+		return err
+	}
+	markers, err := checker.MarkerLines(run.logs.Bytes())
+	if err != nil {
+		return err
+	}
+	if err := raw.WriteBytes(dir, raw.MarkersFile, markers); err != nil {
+		return err
+	}
+	if err := raw.WriteJSON(dir, raw.TimelineFile, run.timeline); err != nil {
+		return err
+	}
+	run.rawWritten = true
+	return nil
+}
+
+// crossCheck reads the topic live with read_committed and compares it with the
+// committed view derived from the dump. Any difference fails the cycle: it would
+// mean the dump, or its derivation, is not what a consumer saw.
+func (r *Runner) crossCheck(ctx context.Context, run *cycleRun) error {
+	live, err := checker.ReadKafka(ctx, r.seeds(run.cycle.Topology.Brokers), "orders."+run.cycle.ID)
+	if err != nil {
+		return err
+	}
+	records, err := dump.Read(raw.DumpPath(r.opts.ResultsDir, run.cycle.ID))
+	if err != nil {
+		return err
+	}
+	derived, err := checker.FromDump(records)
+	if err != nil {
+		return err
+	}
+	return sameRecords(live, derived)
+}
+
+func sameRecords(live, derived []checker.Record) error {
+	order := func(a, b checker.Record) int {
+		return cmp.Or(cmp.Compare(a.Partition, b.Partition), cmp.Compare(a.Offset, b.Offset))
+	}
+	live, derived = slices.Clone(live), slices.Clone(derived)
+	slices.SortFunc(live, order)
+	slices.SortFunc(derived, order)
+	if len(live) != len(derived) {
+		return fmt.Errorf("dump gives %d committed records, the live read %d", len(derived), len(live))
+	}
+	for i := range live {
+		if !live[i].Timestamp.Equal(derived[i].Timestamp) || live[i].Pair != derived[i].Pair ||
+			live[i].Partition != derived[i].Partition || live[i].Offset != derived[i].Offset || live[i].EventID != derived[i].EventID {
+			return fmt.Errorf("record %d differs: dump %+v, live %+v", i, derived[i], live[i])
+		}
+	}
+	return nil
+}
+
+// check computes every metric from the raw files alone, exactly as cmd/recompute
+// does (SPEC 11.5).
+func (r *Runner) check(run *cycleRun) error {
+	loaded, err := checker.FromRaw(r.opts.ResultsDir, run.cycle.ID)
+	if err != nil {
+		return err
+	}
+	res, rec, cost, damage := Evaluate(loaded)
+	run.row.Result, run.row.Recoveries, run.row.Cost = res, rec, cost
+	slots := run.damage.SlotTimeline
+	run.damage = damage
+	run.damage.SlotTimeline = slots
+	return nil
+}
+
+// Evaluate computes a cycle's metrics from its loaded raw files. The runner and
+// cmd/recompute both call it.
+func Evaluate(loaded checker.Raw) (checker.Result, checker.Recoveries, checker.Cost, checker.Damage) {
+	in, t := loaded.Input, loaded.Timeline
+	res, damage := checker.Check(in)
+	if !t.FailoverAt.IsZero() {
+		damage.LateAfterFailover = checker.LateDeliveries(in, t.FailoverAt)
+	}
+	timing := checker.Timing{
+		LoadStart: t.LoadStart, WarmupEnd: t.WarmupEnd, FirstFault: firstFault(t),
+		FaultEnd: t.FaultEnd, LoadStop: t.LoadStop, ObservedUntil: t.ObservedUntil,
+	}
+	rec := checker.ComputeRecoveries(in, timing, loaded.Load.Requests, res.WindowInvalid)
+	cost := checker.ComputeCost(in, t.CPUStart, t.CPUEnd, t.CPUValid, res.WindowInvalid)
+	return res, rec, cost, damage
+}
+
+// firstFault is the earliest fault injection or point hit.
+func firstFault(t raw.Timeline) time.Time {
+	first := t.PointHit
+	for _, f := range t.Faults {
+		if first.IsZero() || (!f.Injected.IsZero() && f.Injected.Before(first)) {
+			first = f.Injected
+		}
+	}
+	return first
 }
 
 // prepare works out the cycle's components and environment.
@@ -547,7 +850,8 @@ func (r *Runner) precheck(ctx context.Context, run *cycleRun, session *load.Sess
 	}
 	run.row.PreP99MS = session.RecentP99(precheckWindow)
 	run.row.PreHostLoad = hostLoad()
-	run.row.Thermal = thermalState()
+	thermal, warning := thermalState()
+	run.row.Thermal = thermal
 	var flags []string
 	if run.row.PreP99MS > r.measurement.PrecheckMaxP99MS {
 		flags = append(flags, "latency")
@@ -555,46 +859,11 @@ func (r *Runner) precheck(ctx context.Context, run *cycleRun, session *load.Sess
 	if run.row.PreHostLoad > r.measurement.PrecheckMaxHostLoad {
 		flags = append(flags, "load")
 	}
-	if run.row.Thermal != "" {
+	if warning {
 		flags = append(flags, "thermal")
 	}
 	run.row.PreFlag = strings.Join(flags, "+")
 	return nil
-}
-
-// thermalState summarises macOS's thermal and performance warnings, or "" when
-// none is recorded. Apple Silicon reports warnings, not a CPU speed limit.
-func thermalState() string {
-	out, err := exec.Command("pmset", "-g", "therm").Output()
-	if err != nil {
-		return "unknown"
-	}
-	var states []string
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(line, "No ") && strings.Contains(line, "has been recorded") {
-			continue
-		}
-		states = append(states, line)
-	}
-	return strings.Join(states, "; ")
-}
-
-// hostLoad is the Mac's one-minute load average, or 0 if unavailable.
-func hostLoad() float64 {
-	out, err := exec.Command("sysctl", "-n", "vm.loadavg").Output()
-	if err != nil {
-		return 0
-	}
-	fields := strings.Fields(string(out))
-	if len(fields) < 2 {
-		return 0
-	}
-	load, err := strconv.ParseFloat(fields[1], 64)
-	if err != nil {
-		return 0
-	}
-	return load
 }
 
 func (r *Runner) captureLogs(ctx context.Context, run *cycleRun, name string) error {
@@ -625,7 +894,8 @@ func (r *Runner) removeComponents(ctx context.Context) error {
 }
 
 // reset follows the order in SPEC 14.2.
-func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
+func (r *Runner) reset(ctx context.Context, run *cycleRun) error {
+	cycle := run.cycle
 	ctx, cancel := context.WithTimeout(ctx, resetTimeout)
 	defer cancel()
 	if err := r.removeComponents(ctx); err != nil {
@@ -658,6 +928,7 @@ func (r *Runner) reset(ctx context.Context, cycle Cycle) error {
 	if err := r.createTopic(ctx, cycle); err != nil {
 		return err
 	}
+	run.topicCreated = true
 	if err := errors.Join(r.toxics.ResetState(), r.pgToxics.ResetState()); err != nil {
 		return fmt.Errorf("reset toxiproxy: %w", err)
 	}
@@ -724,62 +995,16 @@ func (r *Runner) waitHealthy(ctx context.Context) error {
 	}
 }
 
-// drain waits until the topic's end offsets and the unsent outbox count stop
-// moving for quiet_s.
-func (r *Runner) drain(ctx context.Context, run *cycleRun) error {
-	cycle := run.cycle
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cycle.Drain.TimeoutS)*time.Second)
-	defer cancel()
-	conn, err := pgx.Connect(ctx, run.truthDSN)
-	if err != nil {
-		return fmt.Errorf("connect to postgres: %w", err)
-	}
-	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
-
-	quiet := time.Duration(cycle.Drain.QuietS) * time.Second
-	topic := "orders." + cycle.ID
-	var last [3]int64
-	last[0] = -1
-	since := time.Now()
-	for {
-		offsets, err := r.admin.ListEndOffsets(ctx, topic)
-		if err != nil {
-			return fmt.Errorf("list end offsets: %w", err)
-		}
-		var current [3]int64
-		offsets.Each(func(o kadm.ListedOffset) { current[0] += o.Offset })
-		if cycle.Pattern == "P3" {
-			err := conn.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE sent_at IS NULL`).Scan(&current[1])
-			if err != nil {
-				return fmt.Errorf("count unsent: %w", err)
-			}
-		}
-		if len(cycle.Topology.Consumers) > 0 {
-			// Consumers may still be catching up after Kafka has gone quiet.
-			err := conn.QueryRow(ctx, `SELECT (SELECT count(*) FROM consumer.payments_naive)
-				+ (SELECT count(*) FROM consumer.payments_dedup)
-				+ (SELECT count(*) FROM consumer.payments_upsert)`).Scan(&current[2])
-			if err != nil {
-				return fmt.Errorf("count payments: %w", err)
-			}
-		}
-		if current != last {
-			last, since = current, time.Now()
-		}
-		if time.Since(since) >= quiet && current[1] == 0 {
-			return nil
-		}
-		if err := sleep(ctx, 500*time.Millisecond); err != nil {
-			return err
-		}
-	}
-}
-
 // keepEvidence stores the damage list and logs of cycles worth explaining.
-func (r *Runner) keepEvidence(run *cycleRun, damage checker.Damage) error {
+func (r *Runner) keepEvidence(run *cycleRun) error {
 	res := run.row.Result
+	damage := run.damage
+	business := 0
+	for _, b := range res.Business {
+		business += b.Total()
+	}
 	diagnostic := run.cycle.Group == "X" // diagnostic vectors keep all evidence
-	if !diagnostic && run.row.Status == "OK" && res.Lost+res.Ghost+res.Duplicates+res.OutOfOrder == 0 {
+	if !diagnostic && run.row.Status == "OK" && res.Lost+res.Ghost+res.Duplicates+res.OutOfOrder+business == 0 && !res.WindowInvalid {
 		return nil
 	}
 	damageDir := filepath.Join(r.opts.ResultsDir, "damage")

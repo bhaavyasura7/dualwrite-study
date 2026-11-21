@@ -32,7 +32,7 @@ func post(t *testing.T, p patterns.Pattern, path, body string) *httptest.Respons
 	t.Helper()
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
-	newMux(p, time.Second).ServeHTTP(rec, req)
+	newMux(p, time.Second, func() int64 { return 0 }).ServeHTTP(rec, req)
 	return rec
 }
 

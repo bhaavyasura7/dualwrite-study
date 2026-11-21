@@ -18,6 +18,7 @@ import (
 
 	"dualwrite-study/internal/config"
 	"dualwrite-study/internal/obs"
+	"dualwrite-study/internal/raw"
 )
 
 // Report summarises a run. Latency and throughput exclude the warm-up.
@@ -31,10 +32,11 @@ type Report struct {
 	DurationS     float64 `json:"duration_s"`
 }
 
-// sample is one successful request.
+// sample is one request; failed ones are kept for service recovery (SPEC 11.2).
 type sample struct {
 	startMS   float64
 	latencyMS float64
+	ok        bool
 }
 
 type generator struct {
@@ -91,6 +93,18 @@ func (s *Session) Wait() (Report, error) {
 	return result.report, result.err
 }
 
+// Requests is every request so far, with its start time from Start, latency and
+// outcome, in the order they completed.
+func (s *Session) Requests() (time.Time, []raw.Request) {
+	s.g.mu.Lock()
+	defer s.g.mu.Unlock()
+	out := make([]raw.Request, len(s.g.samples))
+	for i, sm := range s.g.samples {
+		out[i] = raw.Request{StartMS: sm.startMS, LatencyMS: sm.latencyMS, OK: sm.ok}
+	}
+	return s.g.start, out
+}
+
 // RecentP99 is the p99 latency of requests started within the last window.
 func (s *Session) RecentP99(window time.Duration) float64 {
 	s.g.mu.Lock()
@@ -98,7 +112,9 @@ func (s *Session) RecentP99(window time.Duration) float64 {
 	since := float64(time.Since(s.g.start)-window) / float64(time.Millisecond)
 	var latencies []float64
 	for i := len(s.g.samples) - 1; i >= 0 && s.g.samples[i].startMS >= since; i-- {
-		latencies = append(latencies, s.g.samples[i].latencyMS)
+		if s.g.samples[i].ok {
+			latencies = append(latencies, s.g.samples[i].latencyMS)
+		}
 	}
 	slices.Sort(latencies)
 	return obs.Percentile(latencies, 99)
@@ -174,12 +190,12 @@ func (g *generator) post(path string, body []byte) ([]byte, bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.requests++
-	if ok {
-		g.samples = append(g.samples, sample{
-			startMS:   float64(began.Sub(g.start)) / float64(time.Millisecond),
-			latencyMS: float64(time.Since(began)) / float64(time.Millisecond),
-		})
-	} else {
+	g.samples = append(g.samples, sample{
+		startMS:   float64(began.Sub(g.start)) / float64(time.Millisecond),
+		latencyMS: float64(time.Since(began)) / float64(time.Millisecond),
+		ok:        ok,
+	})
+	if !ok {
 		g.failed++
 	}
 	return payload, ok
@@ -192,7 +208,9 @@ func (g *generator) writeSeries() error {
 	var out bytes.Buffer
 	out.WriteString("start_ms,latency_ms\n")
 	for _, s := range g.samples {
-		fmt.Fprintf(&out, "%.3f,%.3f\n", s.startMS, s.latencyMS)
+		if s.ok { // the file has always held successful requests only
+			fmt.Fprintf(&out, "%.3f,%.3f\n", s.startMS, s.latencyMS)
+		}
 	}
 	if err := os.WriteFile(g.cfg.LatencyFile, out.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("write latency file: %w", err)
@@ -206,7 +224,7 @@ func (g *generator) summary(orders int, elapsed time.Duration) Report {
 	warmupMS := float64(g.cfg.Warmup) / float64(time.Millisecond)
 	var latencies []float64
 	for _, s := range g.samples {
-		if s.startMS >= warmupMS {
+		if s.ok && s.startMS >= warmupMS {
 			latencies = append(latencies, s.latencyMS)
 		}
 	}

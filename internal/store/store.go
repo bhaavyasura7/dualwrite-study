@@ -105,7 +105,7 @@ func InsertOutbox(ctx context.Context, tx pgx.Tx, ev events.Event) error {
 // relay are skipped.
 func ReadUnsent(ctx context.Context, tx pgx.Tx, limit int) ([]events.Event, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT payload FROM outbox WHERE sent_at IS NULL ORDER BY created_at
+		`SELECT payload FROM outbox WHERE sent_at IS NULL ORDER BY created_at, id
 		 LIMIT $1 FOR UPDATE SKIP LOCKED`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read outbox: %w", err)

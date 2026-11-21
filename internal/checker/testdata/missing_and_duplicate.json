@@ -1,0 +1,31 @@
+{
+  "comment": "SPEC 11.4: one missing and one duplicate payment in the same strategy. a is paid twice, b never. business_damage = 2; the 2.8 formula |2 rows - 2 paid| gave 0.",
+  "input": {
+    "db": [
+      {"order": "a", "seq": 1}, {"order": "a", "seq": 2, "status": "PAID"},
+      {"order": "b", "seq": 1}, {"order": "b", "seq": 2, "status": "PAID"}
+    ],
+    "kafka": [
+      {"order": "a", "seq": 1, "event_id": "a1", "partition": 0, "offset": 0},
+      {"order": "a", "seq": 2, "event_id": "ea", "partition": 0, "offset": 1},
+      {"order": "b", "seq": 1, "event_id": "b1", "partition": 1, "offset": 0},
+      {"order": "b", "seq": 2, "event_id": "eb", "partition": 1, "offset": 1}
+    ],
+    "orders": [
+      {"order": "a", "status": "PAID", "amount_cents": 49900},
+      {"order": "b", "status": "PAID", "amount_cents": 49900}
+    ],
+    "payments": {
+      "naive": [
+        {"payment_id": 1, "order": "a", "event_key": "ea", "amount_cents": 49900},
+        {"payment_id": 2, "order": "a", "event_key": "ea", "amount_cents": 49900}
+      ]
+    }
+  },
+  "want": {
+    "orders_total": 2, "events_total": 4,
+    "business": {
+      "naive": {"missing_payments": 1, "duplicate_payments": 1, "unexpected_payments": 0, "incorrect_payment_amounts": 0, "incorrect_order_mappings": 0}
+    }
+  }
+}

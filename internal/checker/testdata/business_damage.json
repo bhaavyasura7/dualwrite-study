@@ -1,13 +1,48 @@
 {
-  "comment": "Three paid orders: naive charged one twice, dedup is exact, upsert missed one.",
+  "comment": "Per-order business damage (SPEC 11.2). Orders a, b, c are paid; d was cancelled. naive: a twice (1 duplicate). dedup: exact. upsert: b missing. The 2.8 net formula would have hidden naive's case where a missing and a duplicate cancel (see business_classes.json).",
   "input": {
-    "db": [{"order": "a", "seq": 1}],
-    "kafka": [{"order": "a", "seq": 1, "partition": 0, "offset": 0}],
-    "payments": {"naive": 4, "dedup": 3, "upsert": 2},
-    "paid_orders": 3
+    "db": [
+      {"order": "a", "seq": 1}, {"order": "a", "seq": 2, "status": "PAID"},
+      {"order": "b", "seq": 1}, {"order": "b", "seq": 2, "status": "PAID"},
+      {"order": "c", "seq": 1}, {"order": "c", "seq": 2, "status": "PAID"},
+      {"order": "d", "seq": 1}, {"order": "d", "seq": 2, "status": "CANCELLED"}
+    ],
+    "kafka": [
+      {"order": "a", "seq": 2, "event_id": "ea", "partition": 0, "offset": 0},
+      {"order": "b", "seq": 2, "event_id": "eb", "partition": 0, "offset": 1},
+      {"order": "c", "seq": 2, "event_id": "ec", "partition": 0, "offset": 2}
+    ],
+    "orders": [
+      {"order": "a", "status": "PAID", "amount_cents": 49900},
+      {"order": "b", "status": "PAID", "amount_cents": 49900},
+      {"order": "c", "status": "PAID", "amount_cents": 49900},
+      {"order": "d", "status": "CANCELLED", "amount_cents": 49900}
+    ],
+    "payments": {
+      "naive": [
+        {"payment_id": 1, "order": "a", "event_key": "ea", "amount_cents": 49900},
+        {"payment_id": 2, "order": "b", "event_key": "eb", "amount_cents": 49900},
+        {"payment_id": 3, "order": "c", "event_key": "ec", "amount_cents": 49900},
+        {"payment_id": 4, "order": "a", "event_key": "ea", "amount_cents": 49900}
+      ],
+      "dedup": [
+        {"payment_id": 1, "order": "a", "event_key": "ea", "amount_cents": 49900},
+        {"payment_id": 2, "order": "b", "event_key": "eb", "amount_cents": 49900},
+        {"payment_id": 3, "order": "c", "event_key": "ec", "amount_cents": 49900}
+      ],
+      "upsert": [
+        {"payment_id": 1, "order": "a", "event_key": "ea", "amount_cents": 49900},
+        {"payment_id": 3, "order": "c", "event_key": "ec", "amount_cents": 49900}
+      ]
+    }
   },
   "want": {
-    "orders_total": 1, "events_total": 1,
-    "business_damage": {"naive": 1, "dedup": 0, "upsert": 1}
+    "orders_total": 4, "events_total": 8, "lost": 5,
+    "collateral_lost": 5,
+    "business": {
+      "naive":  {"missing_payments": 0, "duplicate_payments": 1, "unexpected_payments": 0, "incorrect_payment_amounts": 0, "incorrect_order_mappings": 0},
+      "dedup":  {"missing_payments": 0, "duplicate_payments": 0, "unexpected_payments": 0, "incorrect_payment_amounts": 0, "incorrect_order_mappings": 0},
+      "upsert": {"missing_payments": 1, "duplicate_payments": 0, "unexpected_payments": 0, "incorrect_payment_amounts": 0, "incorrect_order_mappings": 0}
+    }
   }
 }

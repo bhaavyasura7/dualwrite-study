@@ -19,7 +19,7 @@ CREATE TABLE outbox (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   sent_at        TIMESTAMPTZ                 -- NULL = unsent (P3 relay only)
 );
-CREATE INDEX outbox_unsent ON outbox (created_at) WHERE sent_at IS NULL;
+CREATE INDEX outbox_unsent ON outbox (created_at, id) WHERE sent_at IS NULL;  -- matches the relay ORDER BY (SPEC 8)
 
 CREATE PUBLICATION pub_outbox FOR TABLE outbox;
 CREATE PUBLICATION pub_orders FOR TABLE orders;

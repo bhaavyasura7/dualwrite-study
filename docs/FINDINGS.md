@@ -33,7 +33,7 @@ Each unexpected result, kept for the paper's findings. Status: **confirmed** mea
 
 ## Harness bugs
 
-Bugs in our own test setup, for the method section. None reached study data, because none exists yet.
+Bugs in our own test setup, for the method section. Bugs 1–11 reached no study data. Bug 12 reached the study-v3 run, which is excluded for it (`results/EXCLUDED.md`).
 
 | # | Bug | What it would have distorted | How found |
 |---|---|---|---|
@@ -48,6 +48,7 @@ Bugs in our own test setup, for the method section. None reached study data, bec
 | 9 | F-4 and F-5 did not reach Debezium | CDC would have looked immune to flaky networks | Zero effect on P4 |
 | 10 | `PG_IDLE_TX_TIMEOUT_S` never applied | Changing it would have done nothing | Audit of catalogue settings against code |
 | 11 | H-1's burst settings not passed, and burst timed from load start | The crash would have missed the burst | Same audit |
+| 12 | Cycle topics never deleted, so the broker's partition count grew through a run (about 90 to 3,064 in study-v3); and drain and reset did not wait for a restarted broker | C-1 became an unclean restart with a 20–37 s reload (F32); 16 C-1 FAILED_DRAIN, 3 collateral FAILED_RESET, inflated tail windows just after; slow drift for every vector | Rising C-1 failure rate in the study-v3 run, then broker-1's reload log lines |
 
 ## Stack for all entries below
 
@@ -350,6 +351,14 @@ Caveat and evidence: 3 of the 4 disconnects came within 0.2 s of a Postgres chec
 Fix for the study: heartbeats every 10 s. Trial (`experiments/trials/2026-11-08/heartbeat-trial/`): C0-1 on P4 and P5, one hour each, 649,728 and 649,869 events, zero damage of every kind for all three consumers, 0 walsender timeouts, and 0 heartbeat records in the orders topics.
 
 Evidence: `results/runs/1d3fd36d8cfc/` (excluded from main results), Postgres log of that hour.
+
+## F32. On study-v3, C-1's broker stop turned into an unclean restart as cycle topics piled up (harness drift)
+
+C-1 stops the broker with `docker stop` (SIGTERM, then SIGKILL after Docker's default 10 s grace). On study-v3 the runner never deleted cycle topics, so the broker's partition count grew from about 90 to 3,064 over 755 cycles. Broker-1's own log shows the effect: early restarts were clean and reloaded in 1–3 s; from 1,413 partitions on (the first C-1 failure, 21:41 on 2026-11-08) restarts after C-1 were logged as `unclean log dirs` and reloaded in 20–37 s, growing with the partition count. The drain then ran before the broker was ready (16 of 52 C-1 cycles FAILED_DRAIN; 3 later cycles FAILED_RESET; tail windows inflated in some cycles that started just after). So in v3's later cycles C-1 measured an unclean broker restart with a long reload, not the clean stop the vector intends.
+
+study-v4 dumps, verifies and deletes each cycle's topics and waits for the broker before reset, drain and dump. Trial (2026-11-09, fresh broker): every C-1 restart logged `shutdown=clean` with a reload of about 0.1 s. Each row now records `broker_shutdown` and `broker_reload_ms`, so the paper can state which kind of stop every C-1 cycle saw.
+
+Evidence: `results/runs/db204aa82fcb/` and `results/run-must-v3.log` (excluded, see `results/EXCLUDED.md`); broker-1 log lines `Loaded N logs in X ms (unclean log dirs ...)`; archived v3 broker volume (checksum in EXCLUDED.md).
 
 ## Hypotheses to keep and test
 

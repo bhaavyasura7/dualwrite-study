@@ -186,9 +186,9 @@ func TestLateDeliveries(t *testing.T) {
 	moment := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
 	in := Input{
 		DB: []Version{
-			{Pair{"before-late", 1}, moment.Add(-time.Second)},
-			{Pair{"before-early", 1}, moment.Add(-time.Second)},
-			{Pair{"after", 1}, moment.Add(time.Second)},
+			{Pair: Pair{"before-late", 1}, CommitTime: moment.Add(-time.Second)},
+			{Pair: Pair{"before-early", 1}, CommitTime: moment.Add(-time.Second)},
+			{Pair: Pair{"after", 1}, CommitTime: moment.Add(time.Second)},
 		},
 		Kafka: []Record{
 			{Pair: Pair{"before-late", 1}, Timestamp: moment.Add(time.Second)},
@@ -198,28 +198,6 @@ func TestLateDeliveries(t *testing.T) {
 	}
 	if got := LateDeliveries(in, moment); got != 1 {
 		t.Fatalf("late = %d, want 1", got)
-	}
-}
-
-func TestRecoveryS(t *testing.T) {
-	end := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
-	in := Input{
-		DB: []Version{
-			{Pair{"a", 1}, end.Add(-time.Second)},
-			{Pair{"b", 1}, end.Add(-time.Second)},
-			{Pair{"late", 1}, end.Add(time.Minute)},
-		},
-		Kafka: []Record{
-			{Pair: Pair{"a", 1}, Timestamp: end.Add(-500 * time.Millisecond)},
-			{Pair: Pair{"b", 1}, Timestamp: end.Add(3 * time.Second)},
-		},
-	}
-	if got, ok := RecoveryS(in, end); !ok || got != 3 {
-		t.Fatalf("got %v, %v", got, ok)
-	}
-	in.Kafka = in.Kafka[:1]
-	if _, ok := RecoveryS(in, end); ok {
-		t.Fatal("reported recovery with a version still lost")
 	}
 }
 

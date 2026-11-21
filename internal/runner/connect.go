@@ -17,7 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"dualwrite-study/internal/checker"
+	"dualwrite-study/internal/raw"
 )
 
 const connectorDir = "deploy/connect"
@@ -201,14 +201,14 @@ func (r *Runner) connectRequest(ctx context.Context, method, path string, body [
 	return payload, nil
 }
 
-// sampleState records, once a second, the most WAL retained by the cycle's slot,
-// the largest unsent outbox backlog, and every logical slot's position. The
-// returned function stops sampling and gives the results.
-func (r *Runner) sampleState(ctx context.Context, c Cycle) func() (int64, int64, []checker.SlotSample) {
+// sampleState records, once a second, the WAL retained by the cycle's slot, the
+// unsent outbox backlog, and every logical slot's position. The returned
+// function stops sampling and gives the series, for the timeline (SPEC 11.5).
+func (r *Runner) sampleState(ctx context.Context, c Cycle) func() ([]raw.Sample, []raw.Sample, []raw.Slot) {
 	ctx, cancel := context.WithCancel(ctx)
 	type outcome struct {
-		wal, backlog int64
-		slots        []checker.SlotSample
+		wal, backlog []raw.Sample
+		slots        []raw.Slot
 	}
 	result := make(chan outcome, 1)
 	go func() {
@@ -225,26 +225,26 @@ func (r *Runner) sampleState(ctx context.Context, c Cycle) func() (int64, int64,
 				err := conn.QueryRow(ctx, `SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)::bigint
 					FROM pg_replication_slots WHERE slot_name = $1`, slotName(c, connector{})).Scan(&value)
 				if err == nil {
-					out.wal = max(out.wal, value)
+					out.wal = append(out.wal, raw.Sample{At: time.Now(), Value: value})
 				}
 				out.slots = append(out.slots, readSlots(ctx, conn)...)
 			}
 			if c.Pattern == "P3" {
 				err := conn.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE sent_at IS NULL`).Scan(&value)
 				if err == nil {
-					out.backlog = max(out.backlog, value)
+					out.backlog = append(out.backlog, raw.Sample{At: time.Now(), Value: value})
 				}
 			}
 		}
 	}()
-	return func() (int64, int64, []checker.SlotSample) {
+	return func() ([]raw.Sample, []raw.Sample, []raw.Slot) {
 		cancel()
 		out := <-result
 		return out.wal, out.backlog, out.slots
 	}
 }
 
-func readSlots(ctx context.Context, conn *pgx.Conn) []checker.SlotSample {
+func readSlots(ctx context.Context, conn *pgx.Conn) []raw.Slot {
 	rows, err := conn.Query(ctx, `SELECT slot_name, active, COALESCE(confirmed_flush_lsn::text, ''),
 		COALESCE(restart_lsn::text, ''), pg_current_wal_lsn()::text
 		FROM pg_replication_slots WHERE slot_type = 'logical'`)
@@ -252,11 +252,11 @@ func readSlots(ctx context.Context, conn *pgx.Conn) []checker.SlotSample {
 		return nil
 	}
 	defer rows.Close()
-	var samples []checker.SlotSample
+	var samples []raw.Slot
 	now := time.Now()
 	for rows.Next() {
-		sample := checker.SlotSample{Time: now}
-		if rows.Scan(&sample.Slot, &sample.Active, &sample.ConfirmedFlush, &sample.Restart, &sample.CurrentWAL) == nil {
+		sample := raw.Slot{At: now}
+		if rows.Scan(&sample.Name, &sample.Active, &sample.ConfirmedFlush, &sample.Restart, &sample.CurrentWAL) == nil {
 			samples = append(samples, sample)
 		}
 	}
