@@ -911,20 +911,23 @@ Before any run used for results:
 
 **Scope.** Sessions `must` (2,125 cycles), `should` (1,390) and `perf` (75), with every repeat, duration and soak exactly as in `vectors.yaml`. That is 3,590 of the catalogue's 4,010 cycles. `optional` vectors (C-4, D-4, H-1 to H-4; 420 cycles) are not run; the paper lists them as future work. This keeps the three-broker topology out of the paper run, so one broker and about 7 GB of container memory suffice.
 
-**Steps, in order.** Each step starts only when the one before has passed.
+**Steps, in order.** Everything starts from zero on the results machine: no result, topic or database state from the Mac or from v1–v3 carries over. Each step starts only when the one before has passed. Every command on the PC runs inside the tmux session `study` (docs/SETUP.md, 10.2).
 
-| # | Step | Where | Passes when |
-|---|---|---|---|
-| 1 | Set up the results machine | PC | Section 2.1 complete; `docker info` shows at least 11 GiB; `go version` is 1.27.3 |
-| 2 | Candidate commit: v2.9 code and spec, clean tree, pushed | Mac | `make accept` passes on the Mac, including every 2.9 golden fixture (Section 11.4) and the tests in Section 17 |
-| 3 | Pull the candidate; `make accept` | PC | Every check passes |
-| 4 | Check run (below) into `results/trials/<commit>-check/`, on the clean tree with every machine check on | PC | Every go criterion below holds |
-| 5 | Re-plan: recompute the budget from the check run's overhead, REBUILD, DRAIN and DUMP times | Mac | All three sessions fit before the deadline; if they do not, decide before freezing which whole `should` vectors to leave out, and record the decision here |
-| 6 | Tag the candidate `study-v4`, push the tag | Mac | Tag points at the commit that passed steps 3–4 |
-| 7 | `make run-perf`, nobody using the machine | PC | Session finishes; `make verify` passes; recomputation reproduces `results.csv`; FAILED cycles < 2% |
-| 8 | `make run-must` in tmux | PC | As step 7 |
-| 9 | Review the `must` results while `should` runs | Mac | No sign of a harness fault (below) |
-| 10 | `make run-should`, started as soon as `must` ends | PC | As step 7 |
+| Phase | # | Step | Where | Command | Passes when |
+|---|---|---|---|---|---|
+| 0. Setup | 1 | Set up the results machine | PC | docs/SETUP.md, steps 2–9 | Section 2.1 complete; `docker info` shows at least 11 GiB; `go version` is 1.27.3; `golangci-lint --version` is 2.15.0 |
+| | 2 | Candidate: the 2.9 code and spec, clean tree, pushed to branch `spec-2.9` | Mac | `go test ./...`, `golangci-lint run ./...`, `git push` | Unit tests and lint pass. The tests that need the stack run on the PC in step 3 |
+| 1. Test | 3 | Get the candidate and run every acceptance check | PC | `git fetch && git checkout spec-2.9`, `make up`, `make accept` | Every check passes, including `make smoke-v29` (Section 17) |
+| 2. Check run | 4 | Check run (below) on the clean tree with every machine check on | PC | `make check-run`, then `make verify RUN=results/trials/<commit>-check` and `make recompute RUN=results/trials/<commit>-check` | Every go criterion below holds |
+| | 5 | Re-plan from the check run's overhead, REBUILD, DRAIN and DUMP times | Mac | | All three sessions fit before the deadline; if they do not, decide before freezing which whole `should` vectors to leave out, and record the decision here |
+| 3. Freeze | 6 | Tag the commit that passed steps 3–4 and push the tag; check it out on the PC | Mac, then PC | Mac: `git tag study-v4 && git push origin study-v4`; PC: `git fetch --tags && git checkout study-v4` | `git status --short` on the PC prints nothing; from here no code changes until the run ends |
+| 4. Run | 7 | Session `perf`, nobody using the machine | PC | `make run-perf` | Session finishes; `make verify RUN=results/runs/<commit>/perf` and `make recompute RUN=…` pass; FAILED cycles < 2% |
+| | 8 | Session `must` | PC | `make run-must` | As step 7, for `…/must` |
+| | 9 | Session `should`, started as soon as `must` ends | PC | `make run-should` | As step 7, for `…/should` |
+| | 10 | Review the `must` results while `should` runs | Mac | `git pull` in `dualwrite-results` | No sign of a harness fault (below) |
+| 5. Analysis | 11 | Figures and statistics (Section 15) from the three sessions | Mac | analysis scripts | Every hypothesis of Section 1.4 reported as supported, not supported or inconclusive |
+
+If step 3 or 4 fails, the code is fixed on the Mac, pushed, pulled on the PC, and the step is repeated; fixing is allowed until step 6. After step 6 a fault follows the rule below: a metric bug is fixed by recomputation, an observation bug means `study-v5` and a new run from zero.
 
 `perf` runs first: it is only about 3 h, it secures RQ5 early, and it runs on a freshly started machine. `should` runs last, so a delay costs `should` cycles, never `must` ones.
 
@@ -1191,3 +1194,4 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 86 | 11.3, 11.5, 14.5, 14.6 | (2.9) Raw data saved for every cycle (truth with commit times, outbox, consumer tables, load series, markers, timeline); `cmd/recompute` must reproduce `results.csv` exactly; checker bugs fixed by recomputation at a named analysis commit, observation bugs by a new run |
 | 87 | 14.7 | (2.9) Session order perf, must, should; step 5 decides which whole `should` vectors to drop if the deadline requires it; go criterion 15 (recomputation) |
 | 88 | 5.1, 9.4, 11.5, 14.2 | (2.9, code) Spec matched to the code: DUMP before CHECK and an END state; CHECK computes from raw files and cross-checks the dump against a live read; P1/P2 drain uses `GET /pending`; raw file names; `events_total` is database versions; host-info written by the runner |
+| 89 | 14.7 | (2.9) Run plan as phases 0–5 with the exact command for each step; the stack-dependent tests run on the PC, not the Mac; review of `must` runs alongside `should` |
