@@ -16,13 +16,13 @@ Measured findings are in `docs/FINDINGS.md`.
 
 Done and unit-tested (commits on branch `spec-2.9`): every item of the former table. Business damage per order, cost over one interval, the three recovery times with censoring, commit-time safeguards, drain markers and CDC evidence, `GET /pending`, relay `ORDER BY created_at, id`, dump gap check and control count, `truth_source`, raw files and `cmd/recompute`, runner-driven backups, sessions with manifests, the check-run preset, `verify` against the manifest, Linux host checks, `keep-awake.sh`, `host-info.sh`.
 
-Still to do before the candidate commit (SPEC 14.7, step 2):
+Still to do:
 
-| Section | Item | Needs |
+| Section | Item | Where |
 |---|---|---|
-| 17 | Integration tests against the running stack: `VACUUM (FREEZE)` keeps commit times; relay returns equal `created_at` rows in `id` order; two relays with a stall reorder; a CDC drain with the connector paused does not end until the marker arrives; both consumer orders crash at their hook with the predicted payments | Docker on the Mac; `deploy/smoke-v29.sh` in `make accept` |
-| 14.2 | One real cycle of each pattern through the new runner, with `make recompute` on its trial directory | Docker on the Mac |
-| 15.2 | Analysis code (`analysis/stats.py` and its tests) | Can be written while the study runs |
+| 17 | `make smoke-v29` written (`internal/integration`, build tag `integration`); first run against a real stack | On the PC, in `make accept` |
+| 14.7 | First real cycles of the 2.9 runner: the check run, then `make verify` and `make recompute` on it | On the PC |
+| 15.2 | Analysis code (`analysis/stats.py` and its tests) | While the study runs |
 
 ## Not yet in the runner
 

@@ -1,4 +1,4 @@
-.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash test lint accept run run-all run-must run-should run-perf check-run pause merge verify recompute backup demo
+.PHONY: up down reset ps logs smoke smoke-order smoke-checker smoke-crash smoke-v29 test lint accept run run-all run-must run-should run-perf check-run pause merge verify recompute backup demo
 
 up: ## start the base stack and wait until every service is healthy
 	docker compose up -d --wait --wait-timeout 300
@@ -34,8 +34,12 @@ test:
 
 lint:
 	golangci-lint run ./...
+	golangci-lint run --build-tags integration ./internal/integration/
 
-accept: test lint smoke smoke-order smoke-checker smoke-crash ## every acceptance check; each must pass
+smoke-v29: ## spec 2.9 assumptions against the running stack (SPEC 17): freeze, replica commit times, relay order
+	go test -tags integration -count=1 -v ./internal/integration/
+
+accept: test lint smoke smoke-order smoke-checker smoke-crash smoke-v29 ## every acceptance check; each must pass
 	@echo "acceptance passed"
 
 run: ## run selected vectors: make run VECTORS=A-1 ARGS="-patterns P1"

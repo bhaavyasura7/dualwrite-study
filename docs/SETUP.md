@@ -135,6 +135,11 @@ echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
 cd ~
 ```
 
+**golangci-lint**, the same version as the Mac (`make accept` runs it):
+```bash
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sudo sh -s -- -b /usr/local/go/bin v2.15.0
+```
+
 **Tailscale**, with its built-in SSH server:
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -148,6 +153,7 @@ Now **close the Ubuntu window and open it again** (this applies the Docker group
 docker run --rm hello-world                 # prints "Hello from Docker!"
 docker info | grep "Total Memory"           # about 12–13 GiB
 go version                                  # go1.27.3 linux/amd64
+golangci-lint --version                     # 2.15.0
 tailscale status                            # lists college-pc and your Mac
 ```
 
