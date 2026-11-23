@@ -7,12 +7,12 @@ Mac (you, Claude, the code)                 College PC (Windows → WSL2 Ubuntu)
   edit, commit, push    ── GitHub ──►         git pull in ~/capstone (inside Ubuntu)
   Chrome Remote Desktop ───────────►          Ubuntu window, tmux session "study"
   git pull results      ◄── GitHub ──         the runner's hourly backup pushes
-  Google Drive          ◄── Drive ───         dumps + raw files, copied by the backup
+                                              dumps + raw files stay on the PC
 ```
 
 Steps 0–8 are done once. Section 9 is how you use the PC every day.
 
-Everything here is free: WSL2 and Ubuntu, Docker Engine, Go, git, tmux, Chrome Remote Desktop, Google Drive (15 GB free; the study needs about 4 GB).
+Everything here is free: WSL2 and Ubuntu, Docker Engine, Go, git, tmux, Chrome Remote Desktop.
 
 **Why WSL2 is needed.** Docker, the Makefile and the scripts are Linux-only. WSL2 is a real Linux inside Windows. Everything below runs in the **Ubuntu window**, except the few steps marked *PowerShell* or *Windows*.
 
@@ -132,9 +132,9 @@ golangci-lint --version                     # 2.15.0
 
 ---
 
-## 4. Google Drive for the large files (Windows, then Ubuntu)
+## 4. (Optional, skipped by default) Google Drive for the large files
 
-Topic dumps and raw data (SPEC 11.5) are too big for GitHub. The backup copies them to Google Drive from the PC itself.
+Topic dumps and raw data (SPEC 11.5) are too big for GitHub, so by default they stay **only on the PC**, in `~/capstone/results/`. The backup then prints `WARNING: DRIVE_BACKUP_DIR not set`, which is expected. Never delete `results/` on the PC. Only if you later want a second copy, set up Drive as below.
 
 1. Install **Google Drive for desktop** from <https://www.google.com/drive/download/> and sign in.
 2. Open its settings (gear icon → **Preferences** → **My Drive**) and choose **Mirror files**. This keeps a real folder at `C:\Users\<windows-user>\My Drive`, which Ubuntu can reach.
@@ -226,7 +226,7 @@ Restart the PC once. Connect with Chrome Remote Desktop, open Ubuntu and run:
 docker info | grep "Total Memory"; go version; ls ~; echo $DRIVE_BACKUP_DIR
 ```
 
-If it shows about 23–24 GiB, go1.27.3, `capstone  dualwrite-results` and the Drive path, the setup is complete.
+If it shows about 23–24 GiB, go1.27.3 and `capstone  dualwrite-results`, the setup is complete (the Drive path is empty unless you did step 4).
 
 ---
 
@@ -315,13 +315,7 @@ ls                                           # one folder per machine; the PC's 
 ls <pc-name>/results/runs/<commit>/must/     # results.csv, results.order.txt, damage/, logs/
 ```
 
-Dumps and raw files appear in Google Drive under `dualwrite-backup/<pc-name>/results/`. To check a copy against the PC's checksums (on the Mac, in the Drive folder):
-
-```bash
-cd "<Drive folder>/dualwrite-backup/<pc-name>/results/runs/<commit>/must" && shasum -a 256 -c --quiet SHA256SUMS
-```
-
-(`SHA256SUMS` is rewritten at each backup, so files from cycles finished since then are not in it yet.)
+Dumps and raw files stay on the PC in `~/capstone/results/runs/<commit>/<session>/` (`dumps/`, `raw/`). To check them against the checksums, on the PC: `cd ~/capstone/results/runs/<commit>/must && sha256sum -c --quiet SHA256SUMS`. (`SHA256SUMS` is rewritten at each backup, so files from cycles finished since then are not in it yet.)
 
 ### 9.7 Pausing and resuming
 
@@ -337,7 +331,7 @@ Claude runs only on the Mac and has no connection to the PC. It sees the run thr
 
 1. Remote Desktop → Ubuntu tab → `tmux capture-pane -pt study | tail -20`: still running, with no repeated errors?
 2. On the Mac: `cd ~/Projects/dualwrite-results && git pull`: has a backup arrived in the last couple of hours?
-3. Google Drive: is `dualwrite-backup` growing?
+3. On the PC: `du -sh ~/capstone/results`: is it growing?
 4. `df -h ~` on the PC: more than 20 GB free?
 5. Look for the signs of a harness fault listed in SPEC 14.7. If you see one, stop and decide with SPEC 14.7's rule whether it needs a fix-and-recompute or a new run.
 
@@ -353,7 +347,6 @@ Or ask Claude to do 2, 3 and 5 from the backup.
 | Runner says Docker has too little memory | `free -g` | Fix `.wslconfig` (step 2), then `wsl --shutdown` in PowerShell |
 | Docker not running after a reboot | `systemctl status docker` | `sudo systemctl start docker`; check step 2 (systemd) |
 | Backup not arriving on GitHub | The runner's log in tmux: search for `backup` | Usually GitHub auth: `ssh -T git@github.com` |
-| Drive copy missing | In the tmux session: `echo $DRIVE_BACKUP_DIR` | Empty: the session was started before step 4. Between sessions (never during one), `tmux kill-session -t study`, then `tmux new -As study` again |
 | Remote Desktop can't connect | The PC is off or asleep | Someone switches it on at college; then resume (9.7) |
 | Disk filling up | `df -h ~` | The runner refuses to start under 20 GB free; delete old trial folders only after they are backed up |
 | tmux session gone | `tmux ls` | The PC rebooted: `tmux new -As study` and rerun the same `make run-...` |
