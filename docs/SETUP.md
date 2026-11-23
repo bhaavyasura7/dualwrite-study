@@ -207,6 +207,16 @@ schtasks /create /tn "WSL keepalive" /sc onstart /ru $env:USERNAME /rp * /rl hig
   /tr "wsl.exe -d Ubuntu-24.04 --exec sleep infinity"
 ```
 
+**Stop Ubuntu updating itself during the study (Ubuntu window).** An automatic update of Docker or containerd restarts Docker and kills the running cycle, and a changed Docker version would change the test bed mid-study:
+
+```bash
+sudo systemctl disable --now unattended-upgrades apt-daily.timer apt-daily-upgrade.timer
+sudo apt-mark hold docker-ce docker-ce-cli containerd.io docker-compose-plugin docker-buildx-plugin
+apt-mark showhold      # lists the five packages
+```
+
+After the study, undo it with `sudo apt-mark unhold ...` and `sudo systemctl enable --now unattended-upgrades apt-daily.timer apt-daily-upgrade.timer`.
+
 **Stop Defender scanning WSL2's disk** (scans slow the database and skew latency). Find the disk file, then exclude it:
 
 ```powershell
