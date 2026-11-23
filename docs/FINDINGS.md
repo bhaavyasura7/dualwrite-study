@@ -360,6 +360,14 @@ study-v4 dumps, verifies and deletes each cycle's topics and waits for the broke
 
 Evidence: `results/runs/db204aa82fcb/` and `results/run-must-v3.log` (excluded, see `results/EXCLUDED.md`); broker-1 log lines `Loaded N logs in X ms (unclean log dirs ...)`; archived v3 broker volume (checksum in EXCLUDED.md).
 
+## F33. After a broker outage longer than about 60 s, Kafka Connect waits 5 more minutes before restarting the CDC task (results PC, check run)
+
+In C-1_P4_c3_r01 (broker stopped 300 s) the Connect worker lost its coordinator 3 s into the outage, revoked its assignment and stopped the Debezium task. Its poll timeout then expired, so on the broker's return it rejoined as a **new** member. The incremental cooperative protocol treats the old member's connector and task as lost and holds them for `scheduled.rebalance.max.delay.ms` (default 300 000 ms): the log shows `got assignment: ... connectorIds=[], taskIds=[] ... delay=300000` at 11:23:30, 13 s after the broker returned. With the 120 s drain timeout the cycle was `FAILED_DRAIN` (`connector_not_running`). The 10 s and 60 s outages (c1, c2) and every E-2/D-1/D-2 cycle got `delay=0`.
+
+This is Connect's default behaviour, not a harness fault, and it applies to P4 and P5 alike: with a single worker, CDC stays down about 5 minutes after Kafka is back. The study keeps the default and raises `drain.timeout_s` to 480 s (SPEC change 92) so the delay is measured as part of consistency recovery instead of failing the cycle.
+
+Evidence: `dualwrite-results/DESKTOP-38702KM/results/trials/8b3a9472b844-check/logs/C-1_P4_c3_r01.log.gz` (lines "Broker coordinator was unreachable for 3000ms", "worker poll timeout has expired", "delay=300000").
+
 ## Hypotheses to keep and test
 
 Record these as written, then mark them supported or refuted. Do not reword them after the fact.

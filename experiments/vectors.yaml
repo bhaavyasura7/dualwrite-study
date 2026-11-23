@@ -96,7 +96,7 @@
 defaults:
   repeats: 30
   load: { mode: constant, rate_per_s: 100, warmup_s: 10, post_fault_s: 20 }
-  drain: { quiet_s: 10, timeout_s: 120 }
+  drain: { quiet_s: 10, timeout_s: 480 }
   topology:
     relays: 1
     brokers: 1
