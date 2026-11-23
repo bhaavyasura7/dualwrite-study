@@ -82,9 +82,9 @@ All images must have both `arm64` builds (development on Apple Silicon Macs) and
 
 | Item | Value |
 |---|---|
-| Hardware | One x86-64 desktop PC, 16 GB RAM, on mains power, used by nobody else during a session |
+| Hardware | One x86-64 desktop PC, 32 GB RAM, on mains power, used by nobody else during a session |
 | OS | Windows 10 or 11 with WSL2, distribution Ubuntu 24.04; everything below runs inside WSL2 |
-| WSL2 VM | `.wslconfig`: `memory=13GB`, `swap=8GB`, `vmIdleTimeout=-1`; `systemd=true` in `/etc/wsl.conf` |
+| WSL2 VM | `.wslconfig`: `memory=24GB`, `swap=8GB`, `vmIdleTimeout=-1`; `systemd=true` in `/etc/wsl.conf` |
 | Docker | Docker Engine inside WSL2, not Docker Desktop |
 | Go | 1.27.3, `linux/amd64` |
 | Repos | `~/capstone` and `~/dualwrite-results`, side by side on WSL2's own ext4 filesystem, never under `/mnt/c` |
@@ -1046,7 +1046,7 @@ Fixed before the paper run, like the rules above. Python with `numpy` and `scipy
 # 16. Docker Compose requirements
 
 - All services `init: true` (crash hooks, Section 7).
-- Memory limits: Postgres 1 GB each, Kafka 1.5 GB per broker, Connect 1.5 GB, Go services 256 MB each. About 7 GB with one broker and about 9 GB with three (C-4). Give Docker at least 12 GB: Docker Desktop's memory setting on the Mac, `memory=13GB` in `.wslconfig` on the results machine (Section 2.1).
+- Memory limits: Postgres 1 GB each, Kafka 1.5 GB per broker, Connect 1.5 GB, Go services 256 MB each. About 7 GB with one broker and about 9 GB with three (C-4). Give Docker at least 12 GB: Docker Desktop's memory setting on the Mac, `memory=24GB` in `.wslconfig` on the results machine (Section 2.1); the per-container limits above, not the VM size, bound what each component gets, so the VM size does not change the measurements.
 - Postgres replica bootstrapped with `pg_basebackup` in its entrypoint; streaming replication, asynchronous by default (synchronous for D-4).
 - Two Toxiproxy instances: `toxiproxy` for Kafka and `toxiproxy-pg` (API 8475) for Postgres. Toxiproxy dials upstream inside its accept loop, so one dial to a dead address blocks every new client for about 25 s. `toxiproxy-pg` is restarted at failover and after a rebuild, which clears that without touching Kafka traffic.
 - Toxiproxy proxies, grouped by client class so faults can target one side:
@@ -1195,3 +1195,4 @@ Milestones are committed through `deploy/commit-milestone.sh`, which runs `make 
 | 87 | 14.7 | (2.9) Session order perf, must, should; step 5 decides which whole `should` vectors to drop if the deadline requires it; go criterion 15 (recomputation) |
 | 88 | 5.1, 9.4, 11.5, 14.2 | (2.9, code) Spec matched to the code: DUMP before CHECK and an END state; CHECK computes from raw files and cross-checks the dump against a live read; P1/P2 drain uses `GET /pending`; raw file names; `events_total` is database versions; host-info written by the runner |
 | 89 | 14.7 | (2.9) Run plan as phases 0–5 with the exact command for each step; the stack-dependent tests run on the PC, not the Mac; review of `must` runs alongside `should` |
+| 90 | 2.1, 16 | (2.9) Results machine has 32 GB RAM; WSL2 VM raised to `memory=24GB`. Container memory limits are unchanged, so measurements are unaffected |

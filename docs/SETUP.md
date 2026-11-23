@@ -75,7 +75,7 @@ Paste this, save and close:
 
 ```ini
 [wsl2]
-memory=13GB
+memory=24GB
 swap=8GB
 vmIdleTimeout=-1
 ```
