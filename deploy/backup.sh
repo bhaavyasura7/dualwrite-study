@@ -18,7 +18,11 @@ if command -v sha256sum >/dev/null; then SUM=(sha256sum); else SUM=(shasum -a 25
 # Checksums for every session and trial directory (each has a manifest), so a
 # restored copy can be verified with make verify. The list is written outside
 # the directory first, so it never lists itself.
-find results/runs results/trials -name manifest.json 2>/dev/null | while read -r manifest; do
+# Only the folders that exist: find fails on a missing one, and with pipefail that
+# would end the backup before the push.
+roots=()
+for d in results/runs results/trials; do [ -d "$d" ] && roots+=("$d"); done
+[ ${#roots[@]} -eq 0 ] || find "${roots[@]}" -name manifest.json | while read -r manifest; do
   run=$(dirname "$manifest")
   tmp=$(mktemp)
   (cd "$run" && find . -type f ! -name SHA256SUMS ! -name '*.tmp' -print0 | sort -z | xargs -0 -r "${SUM[@]}" > "$tmp")
@@ -28,15 +32,21 @@ done
 source_commit=$(git rev-parse --short=12 HEAD)
 host=$(hostname -s)
 mkdir -p "$dest/$host"
-# Topic dumps and raw files (SPEC 11.5) are too large for the results repo. On
-# the Mac they go to the Drive folder in DRIVE_BACKUP_DIR; on the results
-# machine the Mac pulls them with rsync (docs/SETUP.md, 10.9). SHA256SUMS above
-# covers them either way.
+# Topic dumps and raw files (SPEC 11.5) are too large for the results repo. They
+# go, with everything else, to the Google Drive folder in DRIVE_BACKUP_DIR
+# (docs/SETUP.md, step 4). SHA256SUMS above covers them.
 rsync -a --exclude dumps/ --exclude raw/ --exclude '*.tmp' results/ "$dest/$host/results/"
 if [ -n "${DRIVE_BACKUP_DIR:-}" ]; then
-  mkdir -p "$DRIVE_BACKUP_DIR/$host"
-  rsync -a --exclude '*.tmp' results/ "$DRIVE_BACKUP_DIR/$host/results/"
-  echo "results, dumps and raw files copied to Drive"
+  # -rt, not -a: a Windows folder (/mnt/c) cannot keep Linux owners or modes.
+  # A Drive failure is reported but does not stop the push below; the files
+  # stay on disk and the next backup copies them.
+  if mkdir -p "$DRIVE_BACKUP_DIR/$host" && rsync -rt --exclude '*.tmp' results/ "$DRIVE_BACKUP_DIR/$host/results/"; then
+    echo "results, dumps and raw files copied to Drive"
+  else
+    echo "WARNING: copy to Drive ($DRIVE_BACKUP_DIR) failed" >&2
+  fi
+else
+  echo "WARNING: DRIVE_BACKUP_DIR not set; dumps and raw files are only on this machine" >&2
 fi
 
 git -C "$dest" add -A
