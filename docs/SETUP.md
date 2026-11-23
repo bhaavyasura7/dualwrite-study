@@ -65,7 +65,7 @@ wsl -l -v          # VERSION column must say 2
 
 ## 3. Give WSL2 enough memory (PC, PowerShell)
 
-By default WSL2 gets only half the RAM (8 GB). The study needs at least 11 GiB for Docker.
+By default WSL2 gets only half the RAM (16 GB). The study needs at least 11 GiB for Docker.
 
 ```powershell
 notepad $env:USERPROFILE\.wslconfig
@@ -103,7 +103,7 @@ Open Ubuntu again (Start menu → **Ubuntu 24.04**). Check:
 
 ```bash
 systemctl is-system-running    # "running" or "degraded" are both fine
-free -g                        # total should be about 12–13
+free -g                        # total should be about 23–24
 ```
 
 ---
@@ -151,7 +151,7 @@ Now **close the Ubuntu window and open it again** (this applies the Docker group
 
 ```bash
 docker run --rm hello-world                 # prints "Hello from Docker!"
-docker info | grep "Total Memory"           # about 12–13 GiB
+docker info | grep "Total Memory"           # about 23–24 GiB
 go version                                  # go1.27.3 linux/amd64
 golangci-lint --version                     # 2.15.0
 tailscale status                            # lists college-pc and your Mac
